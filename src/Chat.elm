@@ -25,6 +25,7 @@ type OutMsg
     = SendMessageOut String
     | NavigateToRootOut
     | NavigateToPageOut Page
+    | RequestChatHeightOut
     | NoOut
 
 type Page
@@ -71,6 +72,8 @@ type Msg
     | ToggleContextMenu
     | CloseContextMenu
     | SelectContext Page
+    | ChatHeightReceived Int
+    | RequestPositionAfterDelay
 
 -- INIT
 init : ( Model, Cmd Msg )
@@ -164,11 +167,8 @@ update msg model =
                     }
                 
                 newModel = { model | messages = aiMessage :: model.messages }
-                
-                -- Check if we should use inline suggestions now (after 2nd message for easier testing)
-                shouldUseInline = List.length newModel.messages > 2
             in
-            ( { newModel | suggestionsInline = shouldUseInline }
+            ( newModel
             , Task.perform (\_ -> AnimateText aiMessage) (Task.succeed ())
             , NoOut
             )
@@ -204,11 +204,14 @@ update msg model =
                                 updatedMessage :: rest
                             else
                                 m :: updateMessages rest
+                
+                isAnimationComplete = updatedMessage.visibleChars >= String.length message.content
             in
             ( { model | messages = updateMessages model.messages }
-            , if updatedMessage.visibleChars >= String.length message.content then
-                -- Animation complete, no additional action needed
-                Cmd.none
+            , if isAnimationComplete then
+                -- Animation complete, request position measurement after small delay
+                Process.sleep 100
+                    |> Task.perform (\_ -> RequestPositionAfterDelay)
               else
                 Task.perform (\_ -> AnimateText updatedMessage) (Task.succeed ())
             , NoOut
@@ -376,6 +379,24 @@ update msg model =
             ( { model | contextMenuOpen = False }
             , Cmd.none
             , NavigateToPageOut page
+            )
+
+        ChatHeightReceived gap ->
+            let
+                -- Determine if suggestions should be inline based on gap between messages and suggestions
+                -- If the gap is less than 50px, the messages are getting too close to the suggestions
+                -- and we should move suggestions inline to avoid collision
+                shouldUseInline = gap < 50
+            in
+            ( { model | suggestionsInline = shouldUseInline }
+            , Cmd.none
+            , NoOut
+            )
+
+        RequestPositionAfterDelay ->
+            ( model
+            , Cmd.none
+            , RequestChatHeightOut
             )
 
 -- SUBSCRIPTIONS
@@ -622,20 +643,33 @@ viewInput page model =
             not model.suggestionsInline &&  -- Only show here when not inline
             case latestAiMessage of
                 Just message ->
-                    message.visibleChars == String.length message.content && 
-                    message.selectedResponse == Nothing
+                    -- Show suggestions if message is complete OR if this is the first message
+                    (message.visibleChars == String.length message.content || List.length model.messages == 1) &&
+                    message.selectedResponse == Nothing &&
+                    not (List.isEmpty message.suggestedResponses)
                 Nothing ->
                     False
+        
+        -- Get suggestions to show (from latest AI message)
+        suggestionsToShow =
+            case latestAiMessage of
+                Just message ->
+                    if shouldShowSuggestions then
+                        message.suggestedResponses
+                    else
+                        []
+                Nothing ->
+                    []
     in
     Html.form [ onSubmit SendMessage, class "chat-input-container" ]
-        [ case latestAiMessage of
-            Just message ->
-                if shouldShowSuggestions then
-                    viewSuggestedResponses message.suggestedResponses message.selectedResponse message
-                else
+        [ if not (List.isEmpty suggestionsToShow) then
+            case latestAiMessage of
+                Just message ->
+                    viewSuggestedResponses suggestionsToShow message.selectedResponse message
+                Nothing ->
                     text ""
-            Nothing ->
-                text ""
+          else
+            text ""
         , if model.contextMenuOpen then
             div [ class "context-menu-backdrop", onClick CloseContextMenu ] []
           else

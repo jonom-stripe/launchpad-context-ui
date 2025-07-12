@@ -15,6 +15,8 @@ import CodeEditor exposing (viewCodeEditor)
 -- PORTS
 port sendMessageToJs : String -> Cmd msg
 port messageReceived : (D.Value -> msg) -> Sub msg
+port requestSuggestionsPosition : () -> Cmd msg
+port suggestionsPositionReceived : (Int -> msg) -> Sub msg
 
 -- MAIN
 main : Program () Model Msg
@@ -101,6 +103,7 @@ type Msg
     | ChatMsg Chat.Msg
     | MessageReceived D.Value
     | CodeEditorTabClicked String
+    | SuggestionsPositionReceived Int
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -150,6 +153,9 @@ update msg model =
                         Chat.NavigateToPageOut page ->
                             Nav.pushUrl model.key (chatPageToUrl page)
                         
+                        Chat.RequestChatHeightOut ->
+                            requestSuggestionsPosition ()
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
@@ -179,6 +185,15 @@ update msg model =
         CodeEditorTabClicked tabName ->
             ( { model | codeEditorTab = tabName }
             , Cmd.none
+            )
+
+        SuggestionsPositionReceived gap ->
+            let
+                (chatModel, chatCmd, _) =
+                    Chat.update (Chat.ChatHeightReceived gap) model.chat
+            in
+            ( { model | chat = chatModel }
+            , Cmd.map ChatMsg chatCmd
             )
 
 -- HELPERS
@@ -784,6 +799,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ messageReceived MessageReceived
+        , suggestionsPositionReceived SuggestionsPositionReceived
         ]
 
 viewIntegrationFooter : Html msg

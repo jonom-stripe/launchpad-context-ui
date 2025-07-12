@@ -71,4 +71,42 @@ if (app.ports && app.ports.pushUrl) {
   })
 }
 
+// Handle suggestions position measurement
+if (app.ports && app.ports.requestSuggestionsPosition) {
+  app.ports.requestSuggestionsPosition.subscribe(() => {
+    // Find the messages container and suggested responses
+    const messagesContainer = document.querySelector('.messages-container');
+    const suggestedResponses = document.querySelector('.chat-input-container .suggested-responses');
+    
+    if (messagesContainer && suggestedResponses) {
+      // Get positions of both elements
+      const messagesRect = messagesContainer.getBoundingClientRect();
+      const suggestionsRect = suggestedResponses.getBoundingClientRect();
+      
+      // Calculate the bottom of the messages container
+      const messagesBottom = messagesRect.bottom;
+      // Get the top of the suggested responses
+      const suggestionsTop = suggestionsRect.top;
+      
+      // Calculate the gap between them
+      const gap = suggestionsTop - messagesBottom;
+      
+      console.log('Messages bottom:', messagesBottom);
+      console.log('Suggestions top:', suggestionsTop);
+      console.log('Gap between them:', gap);
+      
+      // Send the gap back to Elm (negative gap means overlap, positive means space between)
+      app.ports.suggestionsPositionReceived.send(Math.round(gap));
+    } else if (suggestedResponses) {
+      // Fallback: if only suggestions found, assume plenty of space
+      console.log('Only suggestions found, assuming plenty of space');
+      app.ports.suggestionsPositionReceived.send(200); // Large positive number = plenty of space
+    } else {
+      // If nothing found, assume we need to switch to inline
+      console.log('No elements found, assuming collision');
+      app.ports.suggestionsPositionReceived.send(-50); // Negative = collision
+    }
+  });
+}
+
  
