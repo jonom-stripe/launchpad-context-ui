@@ -562,7 +562,7 @@ body {
 }
 
 .suggested-response {
-  background: #FFFFFF;
+  background: #F8F9FA;
   border: 1px solid #D0D5DD;
   border-radius: 20px;
   padding: 8px 16px;
@@ -570,7 +570,7 @@ body {
   line-height: 20px;
   color: #344054;
   cursor: pointer;
-  transition: none;
+  transition: all 0.2s ease;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
   max-width: 90%;
   text-align: left;
@@ -593,8 +593,11 @@ body {
 }
 
 .suggested-response:hover {
-  background: rgba(249, 250, 251, 0.5);
-  border-color: #98A2B3;
+  background: #6C7688;
+  color: white;
+  border-color: #6C7688;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(108, 118, 136, 0.2);
 }
 
 .fade-in {
