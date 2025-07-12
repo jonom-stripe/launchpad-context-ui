@@ -1,0 +1,15 @@
+# Node.js
+node_modules/
+dist/
+.env
+
+# Elm
+elm-stuff/
+# elm-repl generated files
+repl-temp-*
+
+# Editor and OS files
+.DS_Store
+*.log
+.vscode/
+.idea/
