@@ -26,6 +26,7 @@ type OutMsg
     | NavigateToRootOut
     | NavigateToPageOut Page
     | RequestChatHeightOut
+    | ScrollToBottomOut
     | NoOut
 
 type Page
@@ -74,6 +75,7 @@ type Msg
     | SelectContext Page
     | ChatHeightReceived Int
     | RequestPositionAfterDelay
+    | ScrollAndRequestPosition
 
 -- INIT
 init : ( Model, Cmd Msg )
@@ -209,9 +211,9 @@ update msg model =
             in
             ( { model | messages = updateMessages model.messages }
             , if isAnimationComplete then
-                -- Animation complete, request position measurement after small delay
+                -- Animation complete, scroll and then request position measurement after small delay
                 Process.sleep 100
-                    |> Task.perform (\_ -> RequestPositionAfterDelay)
+                    |> Task.perform (\_ -> ScrollAndRequestPosition)
               else
                 Task.perform (\_ -> AnimateText updatedMessage) (Task.succeed ())
             , NoOut
@@ -398,6 +400,14 @@ update msg model =
             , Cmd.none
             , RequestChatHeightOut
             )
+
+        ScrollAndRequestPosition ->
+            ( model
+            , Cmd.none
+            , ScrollToBottomOut
+            )
+
+
 
 -- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg

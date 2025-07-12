@@ -17,6 +17,8 @@ port sendMessageToJs : String -> Cmd msg
 port messageReceived : (D.Value -> msg) -> Sub msg
 port requestSuggestionsPosition : () -> Cmd msg
 port suggestionsPositionReceived : (Int -> msg) -> Sub msg
+port scrollToBottom : () -> Cmd msg
+
 
 -- MAIN
 main : Program () Model Msg
@@ -145,7 +147,10 @@ update msg model =
                 outCmd =
                     case outMsg of
                         Chat.SendMessageOut message ->
-                            sendMessageToJs message
+                            Cmd.batch
+                                [ sendMessageToJs message
+                                , scrollToBottom ()
+                                ]
                         
                         Chat.NavigateToRootOut ->
                             Nav.pushUrl model.key "/"
@@ -155,6 +160,9 @@ update msg model =
                         
                         Chat.RequestChatHeightOut ->
                             requestSuggestionsPosition ()
+                        
+                        Chat.ScrollToBottomOut ->
+                            scrollToBottom ()
                         
                         Chat.NoOut ->
                             Cmd.none

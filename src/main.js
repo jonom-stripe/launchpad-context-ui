@@ -107,6 +107,39 @@ if (app.ports && app.ports.requestSuggestionsPosition) {
       app.ports.suggestionsPositionReceived.send(-50); // Negative = collision
     }
   });
-}
-
- 
+  }
+  
+  // Handle smooth scrolling to bottom of page
+  if (app.ports && app.ports.scrollToBottom) {
+    app.ports.scrollToBottom.subscribe(() => {
+      // Smooth scroll to the bottom of the entire page
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: 'smooth'
+      });
+      console.log('Scrolling to bottom of page');
+      
+      // After scrolling, wait a bit and then check position for suggestions
+      setTimeout(() => {
+        console.log('Requesting position check after scroll');
+        // Manually trigger the position measurement after scroll
+        const messagesContainer = document.querySelector('.messages-container');
+        const suggestedResponses = document.querySelector('.chat-input-container .suggested-responses');
+        
+        if (messagesContainer && suggestedResponses && app.ports && app.ports.suggestionsPositionReceived) {
+          // Get positions of both elements
+          const messagesRect = messagesContainer.getBoundingClientRect();
+          const suggestionsRect = suggestedResponses.getBoundingClientRect();
+          
+          // Calculate the gap between them
+          const gap = suggestionsRect.top - messagesRect.bottom;
+          
+          console.log('Post-scroll gap measurement:', gap);
+          // Send the gap back to Elm
+          app.ports.suggestionsPositionReceived.send(Math.round(gap));
+        }
+      }, 300); // Wait for scroll animation to complete
+    });
+  }
+  
+    
