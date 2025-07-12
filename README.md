@@ -69,8 +69,46 @@ The application uses:
 - Node.js (v16 or later)
 - npm or yarn
 - Elm (v0.19.1 or later)
+- OpenAI API key (for chat functionality)
 
-### Quick Start
+### Environment Setup
+Before running the application, you need to set up your environment variables:
+
+1. Create a `.env` file in the root directory:
+```bash
+touch .env
+```
+
+2. Add your OpenAI API key to the `.env` file:
+```
+VITE_OPENAI_API=your-openai-api-key-here
+```
+
+To get an OpenAI API key:
+1. Go to [OpenAI's API platform](https://platform.openai.com/account/api-keys)
+2. Sign up or log in to your account
+3. Create a new API key
+4. Copy the key and paste it into your `.env` file
+
+⚠️ **Important**: Never commit your `.env` file to version control. The `.env` file should be included in your `.gitignore`.
+
+### Quick Start (For This Project)
+1. Clone or download this repository
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up your environment variables (see Environment Setup section above)
+
+4. Start the development server:
+```bash
+npm run dev
+```
+
+5. Open your browser to `http://localhost:5173`
+
+### Quick Start (Creating From Scratch)
 1. Create a new project directory and initialize:
 ```bash
 mkdir my-elm-chat
