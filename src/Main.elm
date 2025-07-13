@@ -161,6 +161,9 @@ update msg model =
                         Chat.ScrollToBottomOut ->
                             scrollToBottom ()
                         
+                        Chat.NavigateToOptimalTabOut page ->
+                            Nav.pushUrl model.key (chatPageToMainPage page)
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
@@ -175,11 +178,37 @@ update msg model =
             case D.decodeValue messageDecoder value of
                 Ok (content, suggestions) ->
                     let
-                        (chatModel, chatCmd, _) =
+                        (chatModel, chatCmd, outMsg) =
                             Chat.update (Chat.MessageReceived (content, suggestions)) model.chat
+                        
+                        outCmd =
+                            case outMsg of
+                                Chat.SendMessageOut message ->
+                                    sendMessageToJs message
+                                
+                                Chat.NavigateToRootOut ->
+                                    Nav.pushUrl model.key "/"
+                                
+                                Chat.NavigateToPageOut page ->
+                                    Nav.pushUrl model.key (chatPageToUrl page)
+                                
+                                Chat.RequestChatHeightOut ->
+                                    requestSuggestionsPosition ()
+                                
+                                Chat.ScrollToBottomOut ->
+                                    scrollToBottom ()
+                                
+                                Chat.NavigateToOptimalTabOut page ->
+                                    Nav.pushUrl model.key (chatPageToMainPage page)
+                                
+                                Chat.NoOut ->
+                                    Cmd.none
                     in
                     ( { model | chat = chatModel }
-                    , Cmd.map ChatMsg chatCmd
+                    , Cmd.batch
+                        [ Cmd.map ChatMsg chatCmd
+                        , outCmd
+                        ]
                     )
                 
                 Err _ ->
@@ -226,6 +255,27 @@ pageToChat page =
 
 chatPageToUrl : Chat.Page -> String
 chatPageToUrl chatPage =
+    case chatPage of
+        Chat.BusinessModel ->
+            "/business-model"
+        
+        Chat.Onboarding ->
+            "/onboarding"
+        
+        Chat.Checkout ->
+            "/checkout"
+        
+        Chat.Dashboard ->
+            "/dashboard"
+        
+        Chat.IntegrationOverview ->
+            "/integration-overview"
+        
+        Chat.Other ->
+            "/"
+
+chatPageToMainPage : Chat.Page -> String
+chatPageToMainPage chatPage =
     case chatPage of
         Chat.BusinessModel ->
             "/business-model"

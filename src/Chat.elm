@@ -27,6 +27,7 @@ type OutMsg
     | NavigateToPageOut Page
     | RequestChatHeightOut
     | ScrollToBottomOut
+    | NavigateToOptimalTabOut Page
     | NoOut
 
 type Page
@@ -56,6 +57,7 @@ type alias Model =
     , contextMenuOpen : Bool
     , suggestionsInline : Bool  -- Track positioning mode
     , suggestionsTransitioning : Bool  -- Track if suggestions are transitioning between positions
+    , currentQuestionNumber : Int  -- Track which question we're on (1-5)
     }
 
 type Msg
@@ -101,6 +103,7 @@ init =
       , contextMenuOpen = False
       , suggestionsInline = False
       , suggestionsTransitioning = False
+      , currentQuestionNumber = 1  -- Start with question 1
       }
     , Cmd.none
     )
@@ -184,11 +187,18 @@ update msg model =
                     , removingResponses = False
                     }
                 
-                newModel = { model | messages = aiMessage :: model.messages }
+                -- Detect which question is being asked and determine optimal tab
+                (newQuestionNumber, optimalTab) = detectQuestionAndTab content model.currentQuestionNumber
+                
+                newModel = { model | messages = aiMessage :: model.messages, currentQuestionNumber = newQuestionNumber }
+                
+                navigationCmd = case optimalTab of
+                    Just tab -> NavigateToOptimalTabOut tab
+                    Nothing -> NoOut
             in
             ( newModel
             , Task.perform (\_ -> AnimateText aiMessage) (Task.succeed ())
-            , NoOut
+            , navigationCmd
             )
 
         GotError error ->
@@ -487,6 +497,26 @@ update msg model =
             , ScrollToBottomOut
             )
 
+
+-- HELPER FUNCTIONS
+detectQuestionAndTab : String -> Int -> (Int, Maybe Page)
+detectQuestionAndTab content currentQuestion =
+    let
+        lowerContent = String.toLower content
+    in
+    if String.contains "business model" lowerContent then
+        (1, Just BusinessModel)
+    else if String.contains "collect and pay for fees" lowerContent then
+        (2, Just BusinessModel)
+    else if String.contains "users to onboard" lowerContent then
+        (3, Just Onboarding)
+    else if String.contains "buyers pay your sellers" lowerContent then
+        (4, Just Checkout)
+    else if String.contains "sellers manage their account" lowerContent then
+        (5, Just Dashboard)
+    else
+        -- If no question detected, keep current question number and don't navigate
+        (currentQuestion, Nothing)
 
 -- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg
