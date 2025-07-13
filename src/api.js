@@ -61,7 +61,7 @@ export async function sendMessage(message) {
       return handleSectionChangeRequest(message);
     }
     
-    if (message.includes("Let's continue where we left off")) {
+    if (message.includes("Let's continue setting up")) {
       return handleContinueRequest();
     }
 

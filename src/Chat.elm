@@ -211,9 +211,10 @@ update msg model =
                     Just page ->
                         let
                             sectionName = pageToSectionName page
+                            progressDescription = getProgressDescription model.furthestQuestionReached
                         in
                         [ "I'd like to make changes to my " ++ sectionName ++ " setup"
-                        , "Let's continue where we left off"
+                        , "Let's continue setting up " ++ progressDescription
                         ]
                     Nothing ->
                         suggestions
@@ -292,7 +293,7 @@ update msg model =
             let
                 -- Check if this is a contextual response we should handle locally
                 isContextualResponse = 
-                    String.contains "Let's continue where we left off" response ||
+                    String.contains "Let's continue setting up" response ||
                     String.contains "I'd like to make changes to my" response
 
                 updateMessage message =
@@ -409,7 +410,7 @@ update msg model =
                         case message.selectedResponse of
                             Just response ->
                                 -- Check if this is a contextual response
-                                if String.contains "Let's continue where we left off" response then
+                                if String.contains "Let's continue setting up" response then
                                     -- Handle "continue" locally with proper navigation
                                     let
                                         questionInfo = getQuestionForProgress model.furthestQuestionReached
@@ -452,14 +453,14 @@ update msg model =
                             
                             -- Add AI follow-up for contextual responses
                             shouldAddFollowUp = 
-                                String.contains "Let's continue where we left off" (Maybe.withDefault "" message.selectedResponse) ||
+                                String.contains "Let's continue setting up" (Maybe.withDefault "" message.selectedResponse) ||
                                 String.contains "I'd like to make changes to my" (Maybe.withDefault "" message.selectedResponse)
                         in
                         if shouldAddFollowUp then
                             let
                                 selectedResponse = Maybe.withDefault "" message.selectedResponse
                                 (questionContent, questionSuggestions) = 
-                                    if String.contains "Let's continue where we left off" selectedResponse then
+                                    if String.contains "Let's continue setting up" selectedResponse then
                                         let
                                             questionInfo = getQuestionForProgress model.furthestQuestionReached
                                         in
@@ -592,9 +593,10 @@ update msg model =
                 let
                     sectionName = pageToSectionName page
                     contextualContent = generateContextualMessage page
+                    progressDescription = getProgressDescription model.furthestQuestionReached
                     contextualSuggestions = 
                         [ "I'd like to make changes to my " ++ sectionName ++ " setup"
-                        , "Let's continue where we left off"
+                        , "Let's continue setting up " ++ progressDescription
                         ]
                     
                     contextualAiMessage =
@@ -633,7 +635,7 @@ detectQuestionAndTab content currentQuestion =
     -- Don't navigate for contextual messages asking about changes or continuing
     if String.contains "i see you've returned" lowerContent ||
        String.contains "would you like to make changes" lowerContent ||
-       String.contains "shall we continue where we left off" lowerContent then
+       String.contains "let's continue setting up" lowerContent then
         (currentQuestion, Nothing)
     else if String.contains "business model" lowerContent then
         (1, Just BusinessModel)
@@ -784,6 +786,22 @@ getSectionQuestionNumber response =
         5
     else
         1  -- Default to first question
+
+getProgressDescription : Int -> String
+getProgressDescription furthestQuestion =
+    case furthestQuestion of
+        1 ->
+            "your business model"
+        2 ->
+            "fee collection"
+        3 ->
+            "user onboarding"
+        4 ->
+            "checkout and payments"
+        5 ->
+            "seller account management"
+        _ ->
+            "your integration"
 
 -- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg
