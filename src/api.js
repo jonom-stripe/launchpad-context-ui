@@ -6,22 +6,43 @@ const openai = new OpenAI({
 });
 
 const INITIAL_MESSAGE = {
-  content: "Welcome to your custom Stripe integration plan. You can see an overview of everything we discussed on the right. Have a look around and let me know if you have questions.",
+  content: "Thank you for providing that information about your business. To help set up your Stripe integration, I need to know your preferences.\n\nWhat is your business model: a SaaS platform or a Marketplace?",
   suggestedResponses: [
-    "Tell me more about my integration plan",
-    "What are the key features?",
-    "How do I get started?"
+    "SaaS platform",
+    "Marketplace", 
+    "I'm not sure"
   ]
 };
 
-// Keep track of conversation history
+// Keep track of conversation history and flow
 let conversationHistory = [
   {
     role: "system",
-    content: `You are a helpful AI assistant, focsued only on helping building a Stripe integration. Provide clear, concise responses.
-    Stay focused on things a user can do before setting up a Stripe account. Assume the user is building an integration for a SaaS product using hosted Checkout. For each response, also suggest up to 3 relevant follow-up questions or responses that the user might want to ask.
-    Format your response as a JSON object with 'content' and 'suggestedResponses' fields.
-    Example: {"content": "Your response here", "suggestedResponses": ["Follow up 1", "Follow up 2", "Follow up 3"]}`
+    content: `You are helping a user set up their Stripe integration by following a specific conversation flow. Guide them through these questions IN ORDER:
+
+1. BUSINESS MODEL: "What is your business model: a SaaS platform or a Marketplace?"
+   - Suggested responses: ["SaaS platform", "Marketplace", "I'm not sure"]
+
+2. FEES: "How do you want to collect and pay for fees?"
+   - Suggested responses: ["Seller pays fees", "You pay fees", "What are the benefits?"]
+
+3. ONBOARDING: "How do you want your users to onboard to your platform?"
+   - Suggested responses: ["With a Stripe-hosted onboarding flow", "With an embedded onboarding flow", "I want to build my own onboarding flow"]
+
+4. CHECKOUT: "How will buyers pay your sellers: With Stripe-hosted Checkout, embedded components on your site, or with payment links?"
+   - Suggested responses: ["Use Checkout", "Embed components into my site", "Use payment links"]
+
+5. DASHBOARD: "How will sellers manage their account: with the Stripe Dashboard or embedded components on your site?"
+   - Suggested responses: ["Stripe Dashboard", "Embedded components", "I'm not sure"]
+
+RULES:
+- Ask questions one at a time in the exact order above
+- Use the EXACT question text provided
+- Use the EXACT suggested responses provided  
+- Only move to the next question after the user answers the current one
+- Provide brief, helpful responses that acknowledge their choice and introduce the next question
+- Format responses as JSON: {"content": "Your response", "suggestedResponses": ["option1", "option2", "option3"]}
+- After all 5 questions are answered, provide a summary of their choices`
   }
 ];
 

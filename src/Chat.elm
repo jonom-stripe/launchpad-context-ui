@@ -82,7 +82,20 @@ type Msg
 -- INIT
 init : ( Model, Cmd Msg )
 init =
-    ( { messages = []
+    let
+        placeholderUserMessage =
+            { id = "placeholder-user"
+            , content = "I want to build an online platform"
+            , timestamp = Time.millisToPosix 0
+            , isUser = True
+            , visibleChars = 31  -- Length of the message
+            , suggestedResponses = []
+            , selectedResponse = Nothing
+            , visibleResponses = 0
+            , removingResponses = False
+            }
+    in
+    ( { messages = [ placeholderUserMessage ]
       , inputText = ""
       , error = Nothing
       , contextMenuOpen = False
