@@ -16,7 +16,7 @@ viewCodeEditor activeTab =
                 ]
             , button [ class "download-button" ]
                 [ span [ class "download-button-text" ] [ text "Download project" ]
-                , span [ class "download-button-icon" ] [ text "⬇️" ]
+                , span [ class "download-button-icon" ] [ text "􀈄" ]
                 ]
             ]
         , div [ class "code-content" ]
@@ -32,7 +32,7 @@ viewCodeEditor activeTab =
 viewFileTab : String -> Bool -> Html msg
 viewFileTab name isActive =
     div [ class "file-tab", classList [ ("active", isActive) ] ]
-        [ span [ class "file-tab-icon" ] [ text "📄" ]
+        [ span [ class "file-tab-icon" ] [ text "􀈷" ]
         , span [ class "file-tab-name" ] [ text name ]
         ]
 

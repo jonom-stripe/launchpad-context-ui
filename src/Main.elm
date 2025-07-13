@@ -391,10 +391,10 @@ viewIntegrationHeader : Model -> Html Msg
 viewIntegrationHeader model =
     div [ class "integration-header" ]
         [ div [ class "integration-tabs" ]
-            [ viewIntegrationTab "Business model" "📊" (model.page == BusinessModel) "/business-model"
-            , viewIntegrationTab "Onboarding" "👤" (model.page == Onboarding) "/onboarding"
-            , viewIntegrationTab "Checkout" "💳" (model.page == Checkout) "/checkout"
-            , viewIntegrationTab "Dashboard" "📈" (model.page == Dashboard) "/dashboard"
+            [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) "/business-model"
+            , viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) "/onboarding"
+            , viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) "/checkout"
+            , viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) "/dashboard"
             -- , viewIntegrationTab "Integration overview" "📄" (model.page == IntegrationOverview) "/integration-overview"
             ]
         , div [ class "integration-header-space" ] []
@@ -479,7 +479,7 @@ viewCode model =
                 ]
             , button [ class "download-button" ]
                 [ span [ class "download-button-text" ] [ text "Download project" ]
-                , span [ class "download-button-icon" ] [ text "⬇️" ]
+                , span [ class "download-button-icon" ] [ text "􀈄" ]
                 ]
             ]
         , div [ class "code-content" ]
@@ -495,7 +495,7 @@ viewCode model =
 viewFileTab : String -> Bool -> msg -> Html msg
 viewFileTab name isActive onClickMsg =
     div [ class "file-tab", classList [ ("active", isActive) ], onClick onClickMsg ]
-        [ span [ class "file-tab-icon" ] [ text "📄" ]
+        [ span [ class "file-tab-icon" ] [ text "􀈷" ]
         , span [ class "file-tab-name" ] [ text name ]
         ]
 
@@ -809,18 +809,18 @@ subscriptions model =
         , suggestionsPositionReceived SuggestionsPositionReceived
         ]
 
-viewIntegrationFooter : Html msg
+viewIntegrationFooter : Html Msg
 viewIntegrationFooter =
     div [ class "integration-footer" ]
         [ div [ class "footer-actions" ]
             [ button [ class "footer-button" ]
                 [ div [ class "footer-button-icon" ]
-                    [ text "⚙️" ]
+                    [ text "􀍟" ]
                 , span [ class "footer-button-text" ] [ text "Edit" ]
                 ]
             , button [ class "footer-button footer-button-disabled" ]
                 [ div [ class "footer-button-icon" ]
-                    [ text "💻" ]
+                    [ text "􀪏" ]
                 , span [ class "footer-button-text" ] [ text "View source" ]
                 ]
             ]
