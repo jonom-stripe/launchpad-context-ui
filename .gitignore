@@ -13,3 +13,4 @@ repl-temp-*
 *.log
 .vscode/
 .idea/
+SETUP_GUIDE.md
