@@ -415,8 +415,16 @@ viewHome =
 
 viewBusinessModel : Html msg
 viewBusinessModel =
-    div []
-        [ 
+    div [ style "width" "100%", style "height" "100%", style "display" "flex", style "align-items" "center", style "justify-content" "center" ]
+        [ img 
+            [ src "/images/sample-platform.svg"
+            , alt "Sample Platform"
+            , style "max-width" "100%"
+            , style "max-height" "100%"
+            , style "object-fit" "contain"
+            , style "transform" "scale(1.25)"
+            ]
+            []
         ]
 
 viewOnboarding : Html msg
