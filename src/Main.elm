@@ -481,14 +481,29 @@ viewPage model =
 
 viewIntegrationHeader : Model -> Html Msg
 viewIntegrationHeader model =
+    let
+        furthestProgress = model.chat.furthestQuestionReached
+        
+        visibleTabs = []
+            ++ (if furthestProgress >= 1 then 
+                    [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) BusinessModel ]
+                else 
+                    [])
+            ++ (if furthestProgress >= 3 then 
+                    [ viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) Onboarding ]
+                else 
+                    [])
+            ++ (if furthestProgress >= 4 then 
+                    [ viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) Checkout ]
+                else 
+                    [])
+            ++ (if furthestProgress >= 5 then 
+                    [ viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard ]
+                else 
+                    [])
+    in
     div [ class "integration-header" ]
-        [ div [ class "integration-tabs" ]
-            [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) BusinessModel
-            , viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) Onboarding
-            , viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) Checkout
-            , viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard
-            -- , viewIntegrationTab "Integration overview" "📄" (model.page == IntegrationOverview) IntegrationOverview
-            ]
+        [ div [ class "integration-tabs" ] visibleTabs
         , div [ class "integration-header-space" ] []
         ]
 
