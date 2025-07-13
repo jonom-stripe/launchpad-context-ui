@@ -106,6 +106,7 @@ type Msg
     | MessageReceived D.Value
     | CodeEditorTabClicked String
     | SuggestionsPositionReceived Int
+    | ManualTabClicked Page
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -164,6 +165,9 @@ update msg model =
                         Chat.NavigateToOptimalTabOut page ->
                             Nav.pushUrl model.key (chatPageToMainPage page)
                         
+                        Chat.HandleManualNavigationOut page ->
+                            Nav.pushUrl model.key (chatPageToMainPage page)
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
@@ -201,6 +205,9 @@ update msg model =
                                 Chat.NavigateToOptimalTabOut page ->
                                     Nav.pushUrl model.key (chatPageToMainPage page)
                                 
+                                Chat.HandleManualNavigationOut page ->
+                                    Nav.pushUrl model.key (chatPageToMainPage page)
+                                
                                 Chat.NoOut ->
                                     Cmd.none
                     in
@@ -228,6 +235,44 @@ update msg model =
             in
             ( { model | chat = chatModel }
             , Cmd.map ChatMsg chatCmd
+            )
+
+        ManualTabClicked page ->
+            let
+                (chatModel, chatCmd, outMsg) =
+                    Chat.update (Chat.HandleManualNavigation (pageToChat page)) model.chat
+                
+                outCmd =
+                    case outMsg of
+                        Chat.SendMessageOut message ->
+                            sendMessageToJs message
+                        
+                        Chat.NavigateToRootOut ->
+                            Nav.pushUrl model.key "/"
+                        
+                        Chat.NavigateToPageOut chatPage ->
+                            Nav.pushUrl model.key (chatPageToUrl chatPage)
+                        
+                        Chat.RequestChatHeightOut ->
+                            requestSuggestionsPosition ()
+                        
+                        Chat.ScrollToBottomOut ->
+                            scrollToBottom ()
+                        
+                        Chat.NavigateToOptimalTabOut chatPage ->
+                            Nav.pushUrl model.key (chatPageToMainPage chatPage)
+                        
+                        Chat.HandleManualNavigationOut chatPage ->
+                            Nav.pushUrl model.key (chatPageToMainPage chatPage)
+                        
+                        Chat.NoOut ->
+                            Cmd.none
+            in
+            ( { model | chat = chatModel, page = page }
+            , Cmd.batch
+                [ Cmd.map ChatMsg chatCmd
+                , outCmd
+                ]
             )
 
 -- HELPERS
@@ -438,18 +483,18 @@ viewIntegrationHeader : Model -> Html Msg
 viewIntegrationHeader model =
     div [ class "integration-header" ]
         [ div [ class "integration-tabs" ]
-            [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) "/business-model"
-            , viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) "/onboarding"
-            , viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) "/checkout"
-            , viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) "/dashboard"
-            -- , viewIntegrationTab "Integration overview" "📄" (model.page == IntegrationOverview) "/integration-overview"
+            [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) BusinessModel
+            , viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) Onboarding
+            , viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) Checkout
+            , viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard
+            -- , viewIntegrationTab "Integration overview" "📄" (model.page == IntegrationOverview) IntegrationOverview
             ]
         , div [ class "integration-header-space" ] []
         ]
 
-viewIntegrationTab : String -> String -> Bool -> String -> Html Msg
-viewIntegrationTab title iconSymbol isActive url =
-    a [ href url, class "integration-tab", classList [ ("active", isActive) ] ]
+viewIntegrationTab : String -> String -> Bool -> Page -> Html Msg
+viewIntegrationTab title iconSymbol isActive page =
+    div [ class "integration-tab", classList [ ("active", isActive) ], onClick (ManualTabClicked page) ]
         [ div [ class "integration-tab-content" ]
             [ div [ class "integration-tab-icon" ]
                 [ text iconSymbol ]

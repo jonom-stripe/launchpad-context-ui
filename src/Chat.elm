@@ -28,6 +28,7 @@ type OutMsg
     | RequestChatHeightOut
     | ScrollToBottomOut
     | NavigateToOptimalTabOut Page
+    | HandleManualNavigationOut Page
     | NoOut
 
 type Page
@@ -50,6 +51,13 @@ type alias Message =
     , removingResponses : Bool
     }
 
+type alias QuestionInfo =
+    { content : String
+    , suggestions : List String
+    , questionNumber : Int
+    , targetPage : Page
+    }
+
 type alias Model =
     { messages : List Message
     , inputText : String
@@ -58,6 +66,8 @@ type alias Model =
     , suggestionsInline : Bool  -- Track positioning mode
     , suggestionsTransitioning : Bool  -- Track if suggestions are transitioning between positions
     , currentQuestionNumber : Int  -- Track which question we're on (1-5)
+    , furthestQuestionReached : Int  -- Track the furthest question the user has reached
+    , lastManualNavigation : Maybe Page  -- Track if user manually navigated to a tab
     }
 
 type Msg
@@ -80,6 +90,7 @@ type Msg
     | RequestPositionAfterDelay
     | ClearTransitioning
     | ScrollAfterDelay
+    | HandleManualNavigation Page
 
 -- INIT
 init : ( Model, Cmd Msg )
@@ -104,6 +115,8 @@ init =
       , suggestionsInline = False
       , suggestionsTransitioning = False
       , currentQuestionNumber = 1  -- Start with question 1
+      , furthestQuestionReached = 1  -- Start with question 1
+      , lastManualNavigation = Nothing  -- No manual navigation yet
       }
     , Cmd.none
     )
@@ -190,7 +203,30 @@ update msg model =
                 -- Detect which question is being asked and determine optimal tab
                 (newQuestionNumber, optimalTab) = detectQuestionAndTab content model.currentQuestionNumber
                 
-                newModel = { model | messages = aiMessage :: model.messages, currentQuestionNumber = newQuestionNumber }
+                -- Update furthest progress if we've advanced
+                newFurthestProgress = Basics.max model.furthestQuestionReached newQuestionNumber
+                
+                -- Add contextual suggestions if this is a response to manual navigation
+                contextualSuggestions = case model.lastManualNavigation of
+                    Just page ->
+                        let
+                            sectionName = pageToSectionName page
+                        in
+                        [ "I'd like to make changes to my " ++ sectionName ++ " setup"
+                        , "Let's continue where we left off"
+                        ]
+                    Nothing ->
+                        suggestions
+                
+                updatedAiMessage = { aiMessage | suggestedResponses = contextualSuggestions }
+                
+                newModel = 
+                    { model 
+                    | messages = updatedAiMessage :: model.messages
+                    , currentQuestionNumber = newQuestionNumber
+                    , furthestQuestionReached = newFurthestProgress
+                    , lastManualNavigation = Nothing  -- Clear after handling
+                    }
                 
                 navigationCmd = case optimalTab of
                     Just tab -> NavigateToOptimalTabOut tab
@@ -254,6 +290,11 @@ update msg model =
 
         SelectSuggestedResponse response ->
             let
+                -- Check if this is a contextual response we should handle locally
+                isContextualResponse = 
+                    String.contains "Let's continue where we left off" response ||
+                    String.contains "I'd like to make changes to my" response
+
                 updateMessage message =
                     if not message.isUser then
                         { message 
@@ -273,6 +314,12 @@ update msg model =
 
                 aiMessage =
                     List.head (List.filter (not << .isUser) model.messages)
+
+                outMsg = 
+                    if isContextualResponse then
+                        NoOut  -- Handle locally, don't send to API
+                    else
+                        NoOut  -- Default case
             in
             ( { model | messages = updatedMessages }
             , case aiMessage of
@@ -285,7 +332,7 @@ update msg model =
                             })
                 Nothing ->
                     Cmd.none
-            , NoOut
+            , outMsg
             )
 
         AnimateResponses message ->
@@ -361,10 +408,25 @@ update msg model =
                     else
                         case message.selectedResponse of
                             Just response ->
-                                -- Only send message if this was a selected response
-                                ( Cmd.none
-                                , SendMessageOut response
-                                )
+                                -- Check if this is a contextual response
+                                if String.contains "Let's continue where we left off" response then
+                                    -- Handle "continue" locally with proper navigation
+                                    let
+                                        questionInfo = getQuestionForProgress model.furthestQuestionReached
+                                    in
+                                    ( Cmd.none
+                                    , NavigateToOptimalTabOut questionInfo.targetPage
+                                    )
+                                else if String.contains "I'd like to make changes to my" response then
+                                    -- Handle "make changes" locally
+                                    ( Cmd.none
+                                    , NoOut
+                                    )
+                                else
+                                    -- Regular response, send to API
+                                    ( Cmd.none
+                                    , SendMessageOut response
+                                    )
                             Nothing ->
                                 ( Cmd.none
                                 , NoOut
@@ -385,8 +447,31 @@ update msg model =
                                 , visibleResponses = 0
                                 , removingResponses = False
                                 }
+                            
+                            updatedMessagesWithUser = userMessage :: (updateMessages model.messages)
+                            
+                            -- Add AI follow-up for contextual responses
+                            shouldAddFollowUp = 
+                                String.contains "Let's continue where we left off" (Maybe.withDefault "" message.selectedResponse) ||
+                                String.contains "I'd like to make changes to my" (Maybe.withDefault "" message.selectedResponse)
                         in
-                        userMessage :: (updateMessages model.messages)
+                        if shouldAddFollowUp then
+                            let
+                                selectedResponse = Maybe.withDefault "" message.selectedResponse
+                                (questionContent, questionSuggestions) = 
+                                    if String.contains "Let's continue where we left off" selectedResponse then
+                                        let
+                                            questionInfo = getQuestionForProgress model.furthestQuestionReached
+                                        in
+                                        (questionInfo.content, questionInfo.suggestions)
+                                    else
+                                        getQuestionForSection selectedResponse
+                                
+                                aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (List.length updatedMessagesWithUser)
+                            in
+                            aiFollowUp :: updatedMessagesWithUser
+                        else
+                            updatedMessagesWithUser
                     else
                         updateMessages model.messages
               }
@@ -497,6 +582,47 @@ update msg model =
             , ScrollToBottomOut
             )
 
+        HandleManualNavigation page ->
+            let
+                pageQuestionNumber = pageToQuestionNumber page
+                isGoingBackward = pageQuestionNumber < model.furthestQuestionReached
+            in
+            if isGoingBackward then
+                -- User went back to a previous section, generate contextual message locally
+                let
+                    sectionName = pageToSectionName page
+                    contextualContent = generateContextualMessage page
+                    contextualSuggestions = 
+                        [ "I'd like to make changes to my " ++ sectionName ++ " setup"
+                        , "Let's continue where we left off"
+                        ]
+                    
+                    contextualAiMessage =
+                        { id = String.fromInt (List.length model.messages)
+                        , content = contextualContent
+                        , timestamp = Time.millisToPosix 0
+                        , isUser = False
+                        , visibleChars = String.length contextualContent
+                        , suggestedResponses = contextualSuggestions
+                        , selectedResponse = Nothing
+                        , visibleResponses = List.length contextualSuggestions
+                        , removingResponses = False
+                        }
+                in
+                ( { model 
+                    | messages = contextualAiMessage :: model.messages
+                    , lastManualNavigation = Just page
+                  }
+                , Cmd.none
+                , NoOut
+                )
+            else
+                -- Forward navigation, no special handling needed
+                ( { model | lastManualNavigation = Just page }
+                , Cmd.none
+                , NoOut
+                )
+
 
 -- HELPER FUNCTIONS
 detectQuestionAndTab : String -> Int -> (Int, Maybe Page)
@@ -504,7 +630,12 @@ detectQuestionAndTab content currentQuestion =
     let
         lowerContent = String.toLower content
     in
-    if String.contains "business model" lowerContent then
+    -- Don't navigate for contextual messages asking about changes or continuing
+    if String.contains "i see you've returned" lowerContent ||
+       String.contains "would you like to make changes" lowerContent ||
+       String.contains "shall we continue where we left off" lowerContent then
+        (currentQuestion, Nothing)
+    else if String.contains "business model" lowerContent then
         (1, Just BusinessModel)
     else if String.contains "collect and pay for fees" lowerContent then
         (2, Just BusinessModel)
@@ -517,6 +648,142 @@ detectQuestionAndTab content currentQuestion =
     else
         -- If no question detected, keep current question number and don't navigate
         (currentQuestion, Nothing)
+
+pageToQuestionNumber : Page -> Int
+pageToQuestionNumber page =
+    case page of
+        BusinessModel -> 1
+        Onboarding -> 3
+        Checkout -> 4
+        Dashboard -> 5
+        IntegrationOverview -> 6
+        Other -> 0
+
+pageToSectionName : Page -> String
+pageToSectionName page =
+    case page of
+        BusinessModel -> "business model"
+        Onboarding -> "onboarding"
+        Checkout -> "checkout"
+        Dashboard -> "dashboard"
+        IntegrationOverview -> "integration overview"
+        Other -> "setup"
+
+generateContextualMessage : Page -> String
+generateContextualMessage page =
+    case page of
+        BusinessModel ->
+            "I see you've returned to the business model section. Would you like to make changes to your business model setup, or shall we continue where we left off?"
+        
+        Onboarding ->
+            "I see you've returned to the onboarding section. Would you like to make changes to your onboarding setup, or shall we continue where we left off?"
+        
+        Checkout ->
+            "I see you've returned to the checkout section. Would you like to make changes to your checkout setup, or shall we continue where we left off?"
+        
+        Dashboard ->
+            "I see you've returned to the dashboard section. Would you like to make changes to your dashboard setup, or shall we continue where we left off?"
+        
+        IntegrationOverview ->
+            "I see you've returned to the integration overview. Would you like to make changes to your integration setup, or shall we continue where we left off?"
+        
+        Other ->
+            "I see you've navigated to a different section. Would you like to make changes to this setup, or shall we continue where we left off?"
+
+getQuestionForProgress : Int -> QuestionInfo
+getQuestionForProgress furthestQuestion =
+    case furthestQuestion of
+        1 ->
+            { content = "What is your business model: a SaaS platform or a Marketplace?"
+            , suggestions = [ "SaaS platform", "Marketplace", "I'm not sure" ]
+            , questionNumber = 1
+            , targetPage = BusinessModel
+            }
+        2 ->
+            { content = "How do you want to collect and pay for fees?"
+            , suggestions = [ "Seller pays fees", "You pay fees", "What are the benefits?" ]
+            , questionNumber = 2
+            , targetPage = BusinessModel
+            }
+        3 ->
+            { content = "How do you want your users to onboard to your platform?"
+            , suggestions = [ "With a Stripe-hosted onboarding flow", "With an embedded onboarding flow", "I want to build my own onboarding flow" ]
+            , questionNumber = 3
+            , targetPage = Onboarding
+            }
+        4 ->
+            { content = "How will buyers pay your sellers: With Stripe-hosted Checkout, embedded components on your site, or with payment links?"
+            , suggestions = [ "Use Checkout", "Embed components into my site", "Use payment links" ]
+            , questionNumber = 4
+            , targetPage = Checkout
+            }
+        5 ->
+            { content = "How will sellers manage their account: with the Stripe Dashboard or embedded components on your site?"
+            , suggestions = [ "Stripe Dashboard", "Embedded components", "I'm not sure" ]
+            , questionNumber = 5
+            , targetPage = Dashboard
+            }
+        _ ->
+            { content = "Great! We've covered all the main questions. Is there anything specific you'd like to review or modify?"
+            , suggestions = [ "Review business model", "Review onboarding", "Review checkout", "Review dashboard" ]
+            , questionNumber = 5
+            , targetPage = Dashboard
+            }
+
+getQuestionForSection : String -> (String, List String)
+getQuestionForSection response =
+    let
+        lowerResponse = String.toLower response
+    in
+    if String.contains "business model" lowerResponse then
+        ( "What is your business model: a SaaS platform or a Marketplace?"
+        , [ "SaaS platform", "Marketplace", "I'm not sure" ]
+        )
+    else if String.contains "onboarding" lowerResponse then
+        ( "How do you want your users to onboard to your platform?"
+        , [ "With a Stripe-hosted onboarding flow", "With an embedded onboarding flow", "I want to build my own onboarding flow" ]
+        )
+    else if String.contains "checkout" lowerResponse then
+        ( "How will buyers pay your sellers: With Stripe-hosted Checkout, embedded components on your site, or with payment links?"
+        , [ "Use Checkout", "Embed components into my site", "Use payment links" ]
+        )
+    else if String.contains "dashboard" lowerResponse then
+        ( "How will sellers manage their account: with the Stripe Dashboard or embedded components on your site?"
+        , [ "Stripe Dashboard", "Embedded components", "I'm not sure" ]
+        )
+    else
+        ( "I'd be happy to help you modify your setup. Which section would you like to change?"
+        , [ "Business model", "Onboarding", "Checkout", "Dashboard" ]
+        )
+
+createNextQuestionMessage : String -> List String -> Int -> Message
+createNextQuestionMessage content suggestions messageCount =
+    { id = String.fromInt messageCount
+    , content = content
+    , timestamp = Time.millisToPosix 0
+    , isUser = False
+    , visibleChars = String.length content
+    , suggestedResponses = suggestions
+    , selectedResponse = Nothing
+    , visibleResponses = List.length suggestions
+    , removingResponses = False
+    }
+
+getSectionQuestionNumber : String -> Int
+getSectionQuestionNumber response =
+    let
+        lowerResponse = String.toLower response
+    in
+    if String.contains "business model" lowerResponse then
+        1
+    else if String.contains "onboarding" lowerResponse then
+        3
+    else if String.contains "checkout" lowerResponse then
+        4
+    else if String.contains "dashboard" lowerResponse then
+        5
+    else
+        1  -- Default to first question
 
 -- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg
