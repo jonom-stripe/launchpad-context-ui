@@ -66,4 +66,5 @@
     gap: 24px;
     background-color: #F8F9FA;
     padding: 56px 0px 140px;
+    scroll-behavior: smooth;
 } 

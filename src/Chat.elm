@@ -77,6 +77,7 @@ type Msg
     | ChatHeightReceived Int
     | RequestPositionAfterDelay
     | ClearTransitioning
+    | ScrollAfterDelay
 
 -- INIT
 init : ( Model, Cmd Msg )
@@ -267,7 +268,7 @@ update msg model =
         AnimateResponses message ->
             ( model
             , if message.visibleResponses < List.length message.suggestedResponses then
-                Process.sleep 5
+                Process.sleep 75  -- Match CSS animation delay (75ms between each suggestion)
                     |> Task.perform (\_ -> ShowNextResponse message)
               else
                 Cmd.none
@@ -289,12 +290,26 @@ update msg model =
                                 updatedMessage :: rest
                             else
                                 m :: updateMessages rest
+                
+                -- Check if all suggestions are now visible
+                allSuggestionsShown = updatedMessage.visibleResponses >= List.length updatedMessage.suggestedResponses
+                
+                -- Only scroll if suggestions are inline (pinned to message) and all are shown
+                shouldScrollAfterSuggestions = allSuggestionsShown && model.suggestionsInline && not model.suggestionsTransitioning
             in
             ( { model | messages = updateMessages model.messages }
-            , if updatedMessage.visibleResponses < List.length updatedMessage.suggestedResponses then
-                Cmd.none
-              else
-                Cmd.none
+            , Cmd.batch
+                [ if not allSuggestionsShown then
+                    Task.perform (\_ -> AnimateResponses updatedMessage) (Task.succeed ())
+                  else
+                    Cmd.none
+                , if shouldScrollAfterSuggestions then 
+                    -- Add small delay to ensure CSS animations complete before scrolling
+                    Process.sleep 200
+                        |> Task.perform (\_ -> ScrollAfterDelay)
+                  else 
+                    Cmd.none
+                ]
             , NoOut
             )
 
@@ -411,6 +426,11 @@ update msg model =
 
                 -- Get the latest AI message to start animations
                 latestAiMessage = List.head (List.filter (not << .isUser) updatedMessages)
+                
+                -- Only scroll if there are no suggestions to animate
+                shouldScrollNow = case latestAiMessage of
+                    Just aiMessage -> List.isEmpty aiMessage.suggestedResponses
+                    Nothing -> True
             in
             ( { model 
                 | suggestionsInline = shouldUseInline
@@ -433,7 +453,7 @@ update msg model =
                   Process.sleep 100
                     |> Task.perform (\_ -> ClearTransitioning)
                 ]
-            , ScrollToBottomOut
+            , if shouldScrollNow then ScrollToBottomOut else NoOut
             )
 
         RequestPositionAfterDelay ->
@@ -446,6 +466,12 @@ update msg model =
             ( { model | suggestionsTransitioning = False }
             , Cmd.none
             , NoOut
+            )
+
+        ScrollAfterDelay ->
+            ( model
+            , Cmd.none
+            , ScrollToBottomOut
             )
 
 

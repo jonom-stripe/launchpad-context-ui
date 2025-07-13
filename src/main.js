@@ -117,12 +117,34 @@ if (app.ports && app.ports.requestSuggestionsPosition) {
   // Handle smooth scrolling to bottom of page
   if (app.ports && app.ports.scrollToBottom) {
     app.ports.scrollToBottom.subscribe(() => {
-      // Smooth scroll to the bottom of the entire page
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: 'smooth'
+      console.log('📜 ScrollToBottom triggered!');
+      
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        // Calculate the full document height including any new content
+        const documentHeight = Math.max(
+          document.body.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.clientHeight,
+          document.documentElement.scrollHeight,
+          document.documentElement.offsetHeight
+        );
+        
+        // Smooth scroll to the bottom with a small buffer
+        window.scrollTo({
+          top: documentHeight,
+          behavior: 'smooth'
+        });
+        
+        console.log('📜 Scrolling to bottom - Document height:', documentHeight);
+        
+        // Also ensure chat messages are visible by scrolling the messages container
+        const messagesContainer = document.querySelector('.messages-container');
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          console.log('📜 Also scrolled messages container');
+        }
       });
-      console.log('Scrolling to bottom of page');
     });
   }
   

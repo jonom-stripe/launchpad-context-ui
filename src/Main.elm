@@ -147,10 +147,7 @@ update msg model =
                 outCmd =
                     case outMsg of
                         Chat.SendMessageOut message ->
-                            Cmd.batch
-                                [ sendMessageToJs message
-                                , scrollToBottom ()
-                                ]
+                            sendMessageToJs message
                         
                         Chat.NavigateToRootOut ->
                             Nav.pushUrl model.key "/"
