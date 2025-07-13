@@ -784,6 +784,8 @@ p {
 
 .integration-tab:hover {
   background-color: #E1E6EA;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .integration-tab.active {
