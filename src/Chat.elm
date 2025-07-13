@@ -602,10 +602,10 @@ update msg model =
                         , content = contextualContent
                         , timestamp = Time.millisToPosix 0
                         , isUser = False
-                        , visibleChars = String.length contextualContent
+                        , visibleChars = 0  -- Start with no characters visible to animate typing
                         , suggestedResponses = contextualSuggestions
                         , selectedResponse = Nothing
-                        , visibleResponses = List.length contextualSuggestions
+                        , visibleResponses = 0  -- Start with no suggestions visible to animate them in
                         , removingResponses = False
                         }
                 in
@@ -613,7 +613,7 @@ update msg model =
                     | messages = contextualAiMessage :: model.messages
                     , lastManualNavigation = Just page
                   }
-                , Cmd.none
+                , Task.perform (\_ -> AnimateText contextualAiMessage) (Task.succeed ())  -- Start typing animation
                 , NoOut
                 )
             else
