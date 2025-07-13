@@ -71,43 +71,48 @@ if (app.ports && app.ports.pushUrl) {
   })
 }
 
-// Handle suggestions position measurement
+// Handle suggestions position measurement with debouncing
+let positionMeasurementTimeout;
 if (app.ports && app.ports.requestSuggestionsPosition) {
   app.ports.requestSuggestionsPosition.subscribe(() => {
-    // Find the messages container and suggested responses
-    const messagesContainer = document.querySelector('.messages-container');
-    const suggestedResponses = document.querySelector('.chat-input-container .suggested-responses');
-    
-    if (messagesContainer && suggestedResponses) {
-      // Get positions of both elements
-      const messagesRect = messagesContainer.getBoundingClientRect();
-      const suggestionsRect = suggestedResponses.getBoundingClientRect();
-      
-      // Calculate the bottom of the messages container
-      const messagesBottom = messagesRect.bottom;
-      // Get the top of the suggested responses
-      const suggestionsTop = suggestionsRect.top;
-      
-      // Calculate the gap between them
-      const gap = suggestionsTop - messagesBottom;
-      
-      console.log('Messages bottom:', messagesBottom);
-      console.log('Suggestions top:', suggestionsTop);
-      console.log('Gap between them:', gap);
-      
-      // Send the gap back to Elm (negative gap means overlap, positive means space between)
-      app.ports.suggestionsPositionReceived.send(Math.round(gap));
-    } else if (suggestedResponses) {
-      // Fallback: if only suggestions found, assume plenty of space
-      console.log('Only suggestions found, assuming plenty of space');
-      app.ports.suggestionsPositionReceived.send(200); // Large positive number = plenty of space
-    } else {
-      // If nothing found, assume we need to switch to inline
-      console.log('No elements found, assuming collision');
-      app.ports.suggestionsPositionReceived.send(-50); // Negative = collision
+    // Clear any pending measurements to debounce
+    if (positionMeasurementTimeout) {
+      clearTimeout(positionMeasurementTimeout);
     }
+    
+    // Use requestAnimationFrame to ensure DOM is fully rendered
+    requestAnimationFrame(() => {
+      positionMeasurementTimeout = setTimeout(() => {
+        // Find the messages container and input area
+        const messagesContainer = document.querySelector('.messages-container');
+        const inputContainer = document.querySelector('.chat-input-container');
+        
+        if (messagesContainer && inputContainer) {
+          // Get the height of the conversation content
+          const conversationHeight = messagesContainer.scrollHeight;
+          
+          // Get viewport height and input height
+          const viewportHeight = window.innerHeight;
+          const inputHeight = inputContainer.offsetHeight;
+          
+          // Calculate if conversation is too long for viewport (with 120px buffer)
+          const availableHeight = viewportHeight - inputHeight - 120;
+          const shouldUseInline = conversationHeight > availableHeight;
+          
+          console.log('Conversation height:', conversationHeight);
+          console.log('Available height:', availableHeight);
+          console.log('Should use inline:', shouldUseInline);
+          
+          // Send decision back to Elm (using negative/positive values to match existing logic)
+          app.ports.suggestionsPositionReceived.send(shouldUseInline ? -10 : 100);
+        } else {
+          console.log('Elements not found, defaulting to input area');
+          app.ports.suggestionsPositionReceived.send(100); // Default to input area
+        }
+      }, 16); // Small delay to ensure DOM stability
+    });
   });
-  }
+}
   
   // Handle smooth scrolling to bottom of page
   if (app.ports && app.ports.scrollToBottom) {
@@ -118,27 +123,6 @@ if (app.ports && app.ports.requestSuggestionsPosition) {
         behavior: 'smooth'
       });
       console.log('Scrolling to bottom of page');
-      
-      // After scrolling, wait a bit and then check position for suggestions
-      setTimeout(() => {
-        console.log('Requesting position check after scroll');
-        // Manually trigger the position measurement after scroll
-        const messagesContainer = document.querySelector('.messages-container');
-        const suggestedResponses = document.querySelector('.chat-input-container .suggested-responses');
-        
-        if (messagesContainer && suggestedResponses && app.ports && app.ports.suggestionsPositionReceived) {
-          // Get positions of both elements
-          const messagesRect = messagesContainer.getBoundingClientRect();
-          const suggestionsRect = suggestedResponses.getBoundingClientRect();
-          
-          // Calculate the gap between them
-          const gap = suggestionsRect.top - messagesRect.bottom;
-          
-          console.log('Post-scroll gap measurement:', gap);
-          // Send the gap back to Elm
-          app.ports.suggestionsPositionReceived.send(Math.round(gap));
-        }
-      }, 300); // Wait for scroll animation to complete
     });
   }
   

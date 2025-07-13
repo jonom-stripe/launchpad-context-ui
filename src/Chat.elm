@@ -54,7 +54,8 @@ type alias Model =
     , inputText : String
     , error : Maybe String
     , contextMenuOpen : Bool
-    , suggestionsInline : Bool  -- New field to track positioning mode
+    , suggestionsInline : Bool  -- Track positioning mode
+    , suggestionsTransitioning : Bool  -- Track if suggestions are transitioning between positions
     }
 
 type Msg
@@ -75,7 +76,7 @@ type Msg
     | SelectContext Page
     | ChatHeightReceived Int
     | RequestPositionAfterDelay
-    | ScrollAndRequestPosition
+    | ClearTransitioning
 
 -- INIT
 init : ( Model, Cmd Msg )
@@ -85,6 +86,7 @@ init =
       , error = Nothing
       , contextMenuOpen = False
       , suggestionsInline = False
+      , suggestionsTransitioning = False
       }
     , Cmd.none
     )
@@ -209,11 +211,18 @@ update msg model =
                 
                 isAnimationComplete = updatedMessage.visibleChars >= String.length message.content
             in
-            ( { model | messages = updateMessages model.messages }
+            ( { model 
+                | messages = updateMessages model.messages
+                -- Set transitioning immediately when text completes to prevent flash
+                , suggestionsTransitioning = 
+                    if isAnimationComplete && not (List.isEmpty updatedMessage.suggestedResponses) then
+                        True
+                    else
+                        model.suggestionsTransitioning
+              }
             , if isAnimationComplete then
-                -- Animation complete, scroll and then request position measurement after small delay
-                Process.sleep 100
-                    |> Task.perform (\_ -> ScrollAndRequestPosition)
+                -- Text animation complete - immediately measure position before any other actions
+                Task.perform (\_ -> RequestPositionAfterDelay) (Task.succeed ())
               else
                 Task.perform (\_ -> AnimateText updatedMessage) (Task.succeed ())
             , NoOut
@@ -385,14 +394,46 @@ update msg model =
 
         ChatHeightReceived gap ->
             let
-                -- Determine if suggestions should be inline based on gap between messages and suggestions
-                -- If the gap is less than 50px, the messages are getting too close to the suggestions
-                -- and we should move suggestions inline to avoid collision
-                shouldUseInline = gap < 50
+                -- Simple decision: negative value means use inline, positive means use input area
+                shouldUseInline = gap < 0
+                
+                -- Check if position mode is changing (or if we're starting from transitioning state)
+                isChangingPosition = shouldUseInline /= model.suggestionsInline || model.suggestionsTransitioning
+                
+                -- Reset suggestion animations since we're determining position
+                updatedMessages = 
+                    List.map (\message -> 
+                        if not message.isUser then
+                            { message | visibleResponses = 0, removingResponses = False }
+                        else
+                            message
+                    ) model.messages
+
+                -- Get the latest AI message to start animations
+                latestAiMessage = List.head (List.filter (not << .isUser) updatedMessages)
             in
-            ( { model | suggestionsInline = shouldUseInline }
-            , Cmd.none
-            , NoOut
+            ( { model 
+                | suggestionsInline = shouldUseInline
+                , suggestionsTransitioning = True  -- Keep transitioning until animations start
+                , messages = updatedMessages
+              }
+            , Cmd.batch
+                [ -- Always start animations after position is determined
+                  case latestAiMessage of
+                    Just aiMessage ->
+                        if not (List.isEmpty aiMessage.suggestedResponses) && 
+                           aiMessage.visibleChars == String.length aiMessage.content then
+                            Process.sleep 50  -- Short delay to let state update
+                                |> Task.perform (\_ -> AnimateResponses aiMessage)
+                        else
+                            Cmd.none
+                    Nothing ->
+                        Cmd.none
+                , -- Always clear transitioning flag after starting animations
+                  Process.sleep 100
+                    |> Task.perform (\_ -> ClearTransitioning)
+                ]
+            , ScrollToBottomOut
             )
 
         RequestPositionAfterDelay ->
@@ -401,12 +442,11 @@ update msg model =
             , RequestChatHeightOut
             )
 
-        ScrollAndRequestPosition ->
-            ( model
+        ClearTransitioning ->
+            ( { model | suggestionsTransitioning = False }
             , Cmd.none
-            , ScrollToBottomOut
+            , NoOut
             )
-
 
 
 -- SUBSCRIPTIONS
@@ -424,7 +464,10 @@ view page model =
     div [ class "chat-container" ]
         [ viewHeader
         , div [ class "messages-container" ]
-            (List.map (viewMessage model.suggestionsInline latestAiMessageId) (List.reverse model.messages))
+            (List.map (viewMessage 
+                (model.suggestionsInline && not model.suggestionsTransitioning) 
+                latestAiMessageId) 
+                (List.reverse model.messages))
         , viewInput page model
         , viewError model.error
         ]
@@ -506,7 +549,8 @@ viewMessage suggestionsInline latestAiMessageId message =
             not message.isUser && 
             message.visibleChars == String.length message.content && 
             message.selectedResponse == Nothing &&
-            not (List.isEmpty message.suggestedResponses)
+            not (List.isEmpty message.suggestedResponses) &&
+            not message.removingResponses  -- Don't show if currently being removed
     in
     div [ class "message-container" ]
         [ div
@@ -651,12 +695,14 @@ viewInput page model =
         
         shouldShowSuggestions =
             not model.suggestionsInline &&  -- Only show here when not inline
+            not model.suggestionsTransitioning &&  -- Don't show during transitions
             case latestAiMessage of
                 Just message ->
-                    -- Show suggestions if message is complete OR if this is the first message
-                    (message.visibleChars == String.length message.content || List.length model.messages == 1) &&
+                    -- Show suggestions if message is complete AND we have suggestions AND they're not being removed
+                    message.visibleChars == String.length message.content &&
                     message.selectedResponse == Nothing &&
-                    not (List.isEmpty message.suggestedResponses)
+                    not (List.isEmpty message.suggestedResponses) &&
+                    not message.removingResponses  -- Don't show if currently being removed
                 Nothing ->
                     False
         

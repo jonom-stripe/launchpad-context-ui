@@ -434,6 +434,12 @@ body {
 .file-tab-icon {
   width: 16px;
   height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-right: 6px;
+  opacity: 0.7;
 }
 
 .file-tab-name {
@@ -467,6 +473,10 @@ body {
 .download-button-icon {
   width: 16px;
   height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
 }
 
 .code-content {
@@ -551,6 +561,7 @@ body {
   margin-bottom: 8px;
   background: transparent;
   pointer-events: none;
+  transition: all 0.2s ease;  /* Smooth transitions for positioning changes */
 }
 
 /* Inline version attached to messages */
@@ -578,25 +589,26 @@ body {
   display: block;
   width: fit-content;
   align-self: flex-end;
-  opacity: 0;
-  transform: translateY(-10px) scaleY(0);
+  opacity: 1;  /* Changed from 0 to 1 to prevent flash */
+  transform: translateY(0) scaleY(1);  /* Changed to visible state by default */
   transform-origin: bottom;
   pointer-events: auto;
+  visibility: visible;  /* Ensure always visible when rendered */
 }
 
-/* Inline version styling */
+/* Inline version styling - maintain consistent appearance */
 .message-container .suggested-response {
   align-self: flex-end;
   max-width: 85%;
-  opacity: 1;  /* Ensure inline suggestions are visible immediately */
-  transform: none;  /* Remove any transform that might hide them */
+  opacity: 1;
+  transform: translateY(0) scaleY(1);
 }
 
 .suggested-response:hover {
   background: #6C7688;
   color: white;
   border-color: #6C7688;
-  transform: translateY(-1px);
+  transform: translateY(-1px) scaleY(1);  /* Maintain scaleY during hover */
   box-shadow: 0 2px 8px rgba(108, 118, 136, 0.2);
 }
 
@@ -786,15 +798,11 @@ p {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.integration-tab-icon img {
-  width: 100%;
-  height: 100%;
+  font-size: 14px;
   opacity: 0.6;
 }
 
-.integration-tab.active .integration-tab-icon img {
+.integration-tab.active .integration-tab-icon {
   opacity: 1;
 }
 
@@ -877,12 +885,7 @@ p {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.footer-button-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  font-size: 10px;
 }
 
 .footer-button-text {

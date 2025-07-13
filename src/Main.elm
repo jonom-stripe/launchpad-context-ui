@@ -391,22 +391,21 @@ viewIntegrationHeader : Model -> Html Msg
 viewIntegrationHeader model =
     div [ class "integration-header" ]
         [ div [ class "integration-tabs" ]
-            [ viewIntegrationTab "Business model" "orgChart" (model.page == BusinessModel) "/business-model"
-            , viewIntegrationTab "Onboarding" "invite" (model.page == Onboarding) "/onboarding"
-            , viewIntegrationTab "Checkout" "card" (model.page == Checkout) "/checkout"
-            , viewIntegrationTab "Dashboard" "usage" (model.page == Dashboard) "/dashboard"
-            -- , viewIntegrationTab "Integration overview" "document" (model.page == IntegrationOverview) "/integration-overview"
+            [ viewIntegrationTab "Business model" "📊" (model.page == BusinessModel) "/business-model"
+            , viewIntegrationTab "Onboarding" "👤" (model.page == Onboarding) "/onboarding"
+            , viewIntegrationTab "Checkout" "💳" (model.page == Checkout) "/checkout"
+            , viewIntegrationTab "Dashboard" "📈" (model.page == Dashboard) "/dashboard"
+            -- , viewIntegrationTab "Integration overview" "📄" (model.page == IntegrationOverview) "/integration-overview"
             ]
         , div [ class "integration-header-space" ] []
         ]
 
 viewIntegrationTab : String -> String -> Bool -> String -> Html Msg
-viewIntegrationTab title iconName isActive url =
+viewIntegrationTab title iconSymbol isActive url =
     a [ href url, class "integration-tab", classList [ ("active", isActive) ] ]
         [ div [ class "integration-tab-content" ]
             [ div [ class "integration-tab-icon" ]
-                [ img [ src ("/images/icons/" ++ iconName ++ ".svg"), alt title ] []
-                ]
+                [ text iconSymbol ]
             , span [ class "integration-tab-text" ] [ text title ]
             ]
         ]
@@ -480,7 +479,7 @@ viewCode model =
                 ]
             , button [ class "download-button" ]
                 [ span [ class "download-button-text" ] [ text "Download project" ]
-                , img [ src "/images/arrow-down.svg", class "download-button-icon", alt "Download" ] []
+                , span [ class "download-button-icon" ] [ text "⬇️" ]
                 ]
             ]
         , div [ class "code-content" ]
@@ -496,7 +495,7 @@ viewCode model =
 viewFileTab : String -> Bool -> msg -> Html msg
 viewFileTab name isActive onClickMsg =
     div [ class "file-tab", classList [ ("active", isActive) ], onClick onClickMsg ]
-        [ img [ src "/images/document-icon.svg", class "file-tab-icon", alt "File" ] []
+        [ span [ class "file-tab-icon" ] [ text "📄" ]
         , span [ class "file-tab-name" ] [ text name ]
         ]
 
@@ -816,14 +815,12 @@ viewIntegrationFooter =
         [ div [ class "footer-actions" ]
             [ button [ class "footer-button" ]
                 [ div [ class "footer-button-icon" ]
-                    [ img [ src "/images/icons/settings.svg", alt "Settings" ] []
-                    ]
+                    [ text "⚙️" ]
                 , span [ class "footer-button-text" ] [ text "Edit" ]
                 ]
             , button [ class "footer-button footer-button-disabled" ]
                 [ div [ class "footer-button-icon" ]
-                    [ img [ src "/images/icons/code.svg", alt "Code" ] []
-                    ]
+                    [ text "💻" ]
                 , span [ class "footer-button-text" ] [ text "View source" ]
                 ]
             ]
