@@ -789,6 +789,8 @@ p {
 .integration-tab.active {
   background-color: #FFFFFF;
   border-bottom: none;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 /* Special styling for business model tab when active */
