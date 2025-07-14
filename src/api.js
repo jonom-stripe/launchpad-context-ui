@@ -39,15 +39,16 @@ RULES:
 - Ask questions one at a time in the exact order above
 - Use the EXACT question text provided
 - Use the EXACT suggested responses provided  
-- For decisive answers (like "SaaS platform", "Marketplace", "Seller pays fees", etc.): Provide brief, helpful responses that acknowledge their choice and introduce the next question
+- For decisive answers (like "SaaS platform", "Marketplace", "Seller pays fees", etc.): Provide a brief acknowledgment of their choice, then IMMEDIATELY ask the next question in the sequence with its exact suggested responses
 - For informational requests (like "I'm not sure", "What are the benefits?", or any question): First provide a detailed explanation of the options, then re-ask the SAME question with the same suggested responses
 - Only move to the next question after the user gives a decisive answer
 - Format responses as JSON: {"content": "Your response", "suggestedResponses": ["option1", "option2", "option3"]}
 - After all 5 questions are answered, provide a summary of their choices
 
 EXAMPLES:
-- If user says "I'm not sure" to business model question: Explain what SaaS platforms and marketplaces are, then re-ask "What is your business model: a SaaS platform or a Marketplace?" with same suggestions
-- If user says "What are the benefits?" to fees question: Explain the benefits of each fee structure, then re-ask "How do you want to collect and pay for fees?" with same suggestions`
+- If user says "SaaS platform" to business model question: {"content": "Great choice! A SaaS platform is perfect for subscription-based services. How do you want to collect and pay for fees?", "suggestedResponses": ["Seller pays fees", "You pay fees", "What are the benefits?"]}
+- If user says "I'm not sure" to business model question: {"content": "Let me explain the options. A SaaS platform... A Marketplace... What is your business model: a SaaS platform or a Marketplace?", "suggestedResponses": ["SaaS platform", "Marketplace", "I'm not sure"]}
+- If user says "What are the benefits?" to fees question: {"content": "Here are the benefits of each fee structure... How do you want to collect and pay for fees?", "suggestedResponses": ["Seller pays fees", "You pay fees", "What are the benefits?"]}`
   }
 ];
 
@@ -76,6 +77,12 @@ export async function sendMessage(message) {
       content: message
     });
 
+    console.log('Sending to OpenAI:', {
+      message: message,
+      conversationLength: conversationHistory.length,
+      lastFewMessages: conversationHistory.slice(-3)
+    });
+
     const completion = await openai.chat.completions.create({
       messages: conversationHistory,
       model: "gpt-3.5-turbo",
@@ -84,17 +91,21 @@ export async function sendMessage(message) {
 
     // Add assistant's response to history
     const assistantMessage = completion.choices[0].message;
+    console.log('Received from OpenAI:', assistantMessage.content);
+    
     conversationHistory.push(assistantMessage);
 
     try {
       // Parse the JSON response
       const parsedResponse = JSON.parse(assistantMessage.content);
+      console.log('Parsed response:', parsedResponse);
       return {
         content: parsedResponse.content,
         suggestedResponses: parsedResponse.suggestedResponses || [],
         error: null
       };
     } catch (parseError) {
+      console.error('JSON parsing failed:', parseError, 'Raw content:', assistantMessage.content);
       // If JSON parsing fails, return the message as-is without suggestions
       return {
         content: assistantMessage.content,

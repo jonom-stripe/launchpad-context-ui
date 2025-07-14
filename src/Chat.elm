@@ -229,16 +229,25 @@ update msg model =
                     else
                         (model.currentQuestionNumber, Nothing, model.furthestQuestionReached)
                 
-                -- Add contextual suggestions if this is a response to manual navigation
+                -- Add contextual suggestions only if this is actually a contextual response
+                -- If the AI is asking a proper question, use the AI's suggestions instead
+                isContextualAiResponse = 
+                    String.contains "I see you've returned" (String.toLower content) ||
+                    String.contains "would you like to make changes" (String.toLower content)
+                
                 contextualSuggestions = case model.lastManualNavigation of
                     Just page ->
-                        let
-                            sectionName = pageToSectionName page
-                            progressDescription = getProgressDescription model.furthestQuestionReached
-                        in
-                        [ "I'd like to make changes to my " ++ sectionName ++ " setup"
-                        , "Let's continue setting up " ++ progressDescription
-                        ]
+                        if isContextualAiResponse then
+                            let
+                                sectionName = pageToSectionName page
+                                progressDescription = getProgressDescription model.furthestQuestionReached
+                            in
+                            [ "I'd like to make changes to my " ++ sectionName ++ " setup"
+                            , "Let's continue setting up " ++ progressDescription
+                            ]
+                        else
+                            -- AI is asking a proper question, use its suggestions
+                            finalAiMessage.suggestedResponses
                     Nothing ->
                         finalAiMessage.suggestedResponses
                 
@@ -254,12 +263,25 @@ update msg model =
                     , lastManualNavigation = Nothing  -- Clear after handling
                     }
                 
+                -- Check if this is the final completion response (all questions answered)
+                isCompletionResponse = model.currentQuestionNumber > 5
+                
                 navigationCmd = case optimalTab of
                     Just tab -> NavigateToOptimalTabOut tab
                     Nothing -> NoOut
+                
+                -- For completion responses, force scrolling after a delay to show the summary
+                scrollCmd = if isCompletionResponse then
+                    Process.sleep 1000  -- Wait for text animation to complete
+                        |> Task.perform (\_ -> ScrollAfterDelay)
+                  else
+                    Cmd.none
             in
             ( newModel
-            , Task.perform (\_ -> AnimateText updatedAiMessage) (Task.succeed ())
+            , Cmd.batch
+                [ Task.perform (\_ -> AnimateText updatedAiMessage) (Task.succeed ())
+                , scrollCmd
+                ]
             , navigationCmd
             )
 
@@ -444,6 +466,14 @@ update msg model =
                             else
                                 m :: updateMessages rest
 
+                shouldAddFollowUp = 
+                    case message.selectedResponse of
+                        Just response ->
+                            String.contains "Let's continue setting up" response ||
+                            String.contains "I'd like to make changes to my" response
+                        Nothing ->
+                            False
+
                 (nextCmd, outMsg) =
                     if updatedMessage.visibleResponses > 0 then
                         ( Process.sleep 50
@@ -455,16 +485,45 @@ update msg model =
                             Just response ->
                                 -- Check if this is a contextual response
                                 if String.contains "Let's continue setting up" response then
-                                    -- Handle "continue" locally with proper navigation
+                                    -- Handle "continue" locally with proper navigation and scroll to bottom
                                     let
-                                        questionInfo = getQuestionForProgress model.furthestQuestionReached
+                                        questionInfo = getQuestionForProgress model.currentQuestionNumber
                                     in
-                                    ( Cmd.none
+                                    ( Cmd.batch
+                                        [ Process.sleep 200  -- Small delay to ensure navigation completes
+                                            |> Task.perform (\_ -> ScrollAfterDelay)
+                                        , if shouldAddFollowUp then
+                                            -- Start typing animation for the new AI follow-up message
+                                            let
+                                                selectedResponse = response
+                                                (questionContent, questionSuggestions) = 
+                                                    let
+                                                        questionData = getQuestionForProgress model.currentQuestionNumber
+                                                    in
+                                                    (questionData.content, questionData.suggestions)
+                                                
+                                                aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (1 + List.length model.messages)
+                                            in
+                                            Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
+                                          else
+                                            Cmd.none
+                                        ]
                                     , NavigateToOptimalTabOut questionInfo.targetPage
                                     )
                                 else if String.contains "I'd like to make changes to my" response then
                                     -- Handle "make changes" locally
-                                    ( Cmd.none
+                                    ( if shouldAddFollowUp then
+                                        -- Start typing animation for the new AI follow-up message
+                                        let
+                                            selectedResponse = response
+                                            (questionContent, questionSuggestions) = 
+                                                getQuestionForSection selectedResponse
+                                            
+                                            aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (1 + List.length model.messages)
+                                        in
+                                        Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
+                                      else
+                                        Cmd.none
                                     , NoOut
                                     )
                                 else
@@ -494,11 +553,6 @@ update msg model =
                                 }
                             
                             updatedMessagesWithUser = userMessage :: (updateMessages model.messages)
-                            
-                            -- Add AI follow-up for contextual responses
-                            shouldAddFollowUp = 
-                                String.contains "Let's continue setting up" (Maybe.withDefault "" message.selectedResponse) ||
-                                String.contains "I'd like to make changes to my" (Maybe.withDefault "" message.selectedResponse)
                         in
                         if shouldAddFollowUp then
                             let
@@ -506,7 +560,7 @@ update msg model =
                                 (questionContent, questionSuggestions) = 
                                     if String.contains "Let's continue setting up" selectedResponse then
                                         let
-                                            questionInfo = getQuestionForProgress model.furthestQuestionReached
+                                            questionInfo = getQuestionForProgress model.currentQuestionNumber
                                         in
                                         (questionInfo.content, questionInfo.suggestions)
                                     else
@@ -691,7 +745,11 @@ detectQuestionAndTab content currentQuestion =
     else if String.contains "buyers pay your sellers" lowerContent then
         (4, Just Checkout)
     else if String.contains "sellers manage their account" lowerContent then
-        (5, Just Dashboard)
+        -- Don't auto-navigate if we're already past the dashboard question
+        if currentQuestion > 5 then
+            (currentQuestion, Nothing)
+        else
+            (5, Just Dashboard)
     else
         -- If no question detected, keep current question number and don't navigate
         (currentQuestion, Nothing)
@@ -803,10 +861,10 @@ createNextQuestionMessage content suggestions messageCount =
     , content = content
     , timestamp = Time.millisToPosix 0
     , isUser = False
-    , visibleChars = String.length content
+    , visibleChars = 0  -- Start with no characters visible to animate typing
     , suggestedResponses = suggestions
     , selectedResponse = Nothing
-    , visibleResponses = List.length suggestions
+    , visibleResponses = 0  -- Start with no suggestions visible to animate them in
     , removingResponses = False
     }
 
