@@ -232,7 +232,7 @@ function handleEditIntegrationRequest() {
 // Handle "Walk me through the codebase" request  
 function handleCodebaseWalkthrough() {
   return {
-    content: "I'd love to walk you through the codebase! This feature is coming soon - we're building an interactive code exploration experience.",
+    content: "Let me walk you through the codebase! I'm now showing you the App.jsx file, which is the main component that brings everything together. This React component imports Stripe's loadStripe function and sets up the payment flow. You can see how we initialize Stripe with your publishable key, create the checkout session, and handle the payment elements. The component structure shows a clean separation between the payment form and the backend integration.",
     suggestedResponses: [],
     error: null
   };

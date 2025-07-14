@@ -11,6 +11,7 @@ import Workbench
 import Chat
 import Json.Decode as D
 import CodeEditor exposing (viewCodeEditor)
+import Task
 
 -- PORTS
 port sendMessageToJs : String -> Cmd msg
@@ -112,6 +113,7 @@ type Msg
     | SuggestionsPositionReceived Int
     | ManualTabClicked Page
     | ViewSourceClicked
+    | SetCodeViewActive Bool
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -179,6 +181,12 @@ update msg model =
                         Chat.StopHoverSuggestedResponseOut ->
                             Cmd.none
                         
+                        Chat.NavigateToPageWithCodeViewOut page ->
+                            Cmd.batch
+                                [ Nav.pushUrl model.key (chatPageToMainPage page)
+                                , Task.perform (\_ -> SetCodeViewActive True) (Task.succeed ())
+                                ]
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
@@ -238,6 +246,12 @@ update msg model =
                                 
                                 Chat.HandleManualNavigationOut page ->
                                     Nav.pushUrl model.key (chatPageToMainPage page)
+                                
+                                Chat.NavigateToPageWithCodeViewOut page ->
+                                    Cmd.batch
+                                        [ Nav.pushUrl model.key (chatPageToMainPage page)
+                                        , Task.perform (\_ -> SetCodeViewActive True) (Task.succeed ())
+                                        ]
                                 
                                 Chat.HoverSuggestedResponseOut response ->
                                     Cmd.none
@@ -328,6 +342,12 @@ update msg model =
                         Chat.StopHoverSuggestedResponseOut ->
                             Cmd.none
                         
+                        Chat.NavigateToPageWithCodeViewOut chatPage ->
+                            Cmd.batch
+                                [ Nav.pushUrl model.key (chatPageToMainPage chatPage)
+                                , Task.perform (\_ -> SetCodeViewActive True) (Task.succeed ())
+                                ]
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
@@ -358,6 +378,9 @@ update msg model =
                 ]
             )
 
+        SetCodeViewActive active ->
+            ( { model | showingSourceCode = active }, Cmd.none )
+        
         ViewSourceClicked ->
             ( { model | showingSourceCode = not model.showingSourceCode }, Cmd.none )
 
