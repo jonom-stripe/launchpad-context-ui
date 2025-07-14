@@ -321,6 +321,15 @@ body {
   color: #818DA0;
 }
 
+.context-picker-item-disabled {
+  color: #A8B5C3;
+  cursor: not-allowed;
+}
+
+.context-picker-item-disabled:hover {
+  background: transparent;
+}
+
 .context-picker-separator {
   height: 1px;
   background: #B6C0CD;

@@ -12,7 +12,7 @@ module Chat exposing
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onSubmit, onInput, onClick, stopPropagationOn)
+import Html.Events exposing (onSubmit, onInput, onClick, stopPropagationOn, on)
 import Time
 import Json.Decode as D
 import Process
@@ -51,12 +51,9 @@ type alias Message =
     , removingResponses : Bool
     }
 
-type alias QuestionInfo =
-    { content : String
-    , suggestions : List String
-    , questionNumber : Int
-    , targetPage : Page
-    }
+
+
+
 
 type alias Model =
     { messages : List Message
@@ -172,11 +169,28 @@ update msg model =
 
                     updatedMessages =
                         userMessage :: List.map updateMessage model.messages
+
+                    -- Check if this is a decisive answer that should advance the conversation
+                    isDecisive = isDecisiveAnswer model.currentQuestionNumber model.inputText
+                    
+                    -- Advance question number if this is a decisive answer
+                    newQuestionNumber = 
+                        if isDecisive then
+                            model.currentQuestionNumber + 1
+                        else
+                            model.currentQuestionNumber
+                    
+                    newFurthestProgress = Basics.max model.furthestQuestionReached newQuestionNumber
+
+                    updatedModel = 
+                        { model 
+                        | messages = updatedMessages
+                        , inputText = ""
+                        , currentQuestionNumber = newQuestionNumber
+                        , furthestQuestionReached = newFurthestProgress
+                        }
                 in
-                ( { model 
-                    | messages = updatedMessages
-                    , inputText = ""
-                  }
+                ( updatedModel
                 , case aiMessage of
                     Just message ->
                         Process.sleep 50
@@ -200,11 +214,20 @@ update msg model =
                     , removingResponses = False
                     }
                 
-                -- Detect which question is being asked and determine optimal tab
-                (newQuestionNumber, optimalTab) = detectQuestionAndTab content model.currentQuestionNumber
+                -- Regular flow - use AI response as-is
+                finalAiMessage = aiMessage
+                shouldAdvanceConversation = True
                 
-                -- Update furthest progress if we've advanced
-                newFurthestProgress = Basics.max model.furthestQuestionReached newQuestionNumber
+                -- Don't advance question number in AI responses - we already advanced when user made choice
+                -- Only determine tab navigation if needed
+                (newQuestionNumber, optimalTab, newFurthestProgress) = 
+                    if shouldAdvanceConversation then
+                        let
+                            (_, tab) = detectQuestionAndTab content model.currentQuestionNumber
+                        in
+                        (model.currentQuestionNumber, tab, model.furthestQuestionReached)
+                    else
+                        (model.currentQuestionNumber, Nothing, model.furthestQuestionReached)
                 
                 -- Add contextual suggestions if this is a response to manual navigation
                 contextualSuggestions = case model.lastManualNavigation of
@@ -217,13 +240,15 @@ update msg model =
                         , "Let's continue setting up " ++ progressDescription
                         ]
                     Nothing ->
-                        suggestions
+                        finalAiMessage.suggestedResponses
                 
-                updatedAiMessage = { aiMessage | suggestedResponses = contextualSuggestions }
+                -- Use the AI message with contextual suggestions
+                updatedAiMessage = { finalAiMessage | suggestedResponses = contextualSuggestions }
+                finalMessages = updatedAiMessage :: model.messages
                 
                 newModel = 
                     { model 
-                    | messages = updatedAiMessage :: model.messages
+                    | messages = finalMessages
                     , currentQuestionNumber = newQuestionNumber
                     , furthestQuestionReached = newFurthestProgress
                     , lastManualNavigation = Nothing  -- Clear after handling
@@ -234,7 +259,7 @@ update msg model =
                     Nothing -> NoOut
             in
             ( newModel
-            , Task.perform (\_ -> AnimateText aiMessage) (Task.succeed ())
+            , Task.perform (\_ -> AnimateText updatedAiMessage) (Task.succeed ())
             , navigationCmd
             )
 
@@ -316,13 +341,32 @@ update msg model =
                 aiMessage =
                     List.head (List.filter (not << .isUser) model.messages)
 
+                -- Check if this is a decisive answer that should advance the conversation
+                isDecisive = isDecisiveAnswer model.currentQuestionNumber response
+                
+                -- Advance question number if this is a decisive answer
+                newQuestionNumber = 
+                    if isDecisive && not isContextualResponse then
+                        model.currentQuestionNumber + 1
+                    else
+                        model.currentQuestionNumber
+                
+                newFurthestProgress = Basics.max model.furthestQuestionReached newQuestionNumber
+
+                updatedModel = 
+                    { model 
+                    | messages = updatedMessages
+                    , currentQuestionNumber = newQuestionNumber
+                    , furthestQuestionReached = newFurthestProgress
+                    }
+
                 outMsg = 
                     if isContextualResponse then
                         NoOut  -- Handle locally, don't send to API
                     else
-                        NoOut  -- Default case
+                        SendMessageOut response  -- Send to API (both decisive and information requests)
             in
-            ( { model | messages = updatedMessages }
+            ( updatedModel
             , case aiMessage of
                 Just foundMessage ->
                     Process.sleep 50
@@ -424,9 +468,9 @@ update msg model =
                                     , NoOut
                                     )
                                 else
-                                    -- Regular response, send to API
+                                    -- Regular response already sent to API by SelectSuggestedResponse
                                     ( Cmd.none
-                                    , SendMessageOut response
+                                    , NoOut
                                     )
                             Nothing ->
                                 ( Cmd.none
@@ -627,6 +671,7 @@ update msg model =
 
 
 -- HELPER FUNCTIONS
+
 detectQuestionAndTab : String -> Int -> (Int, Maybe Page)
 detectQuestionAndTab content currentQuestion =
     let
@@ -692,43 +737,37 @@ generateContextualMessage page =
         Other ->
             "I see you've navigated to a different section. Would you like to make changes to this setup, or shall we continue where we left off?"
 
-getQuestionForProgress : Int -> QuestionInfo
+getQuestionForProgress : Int -> { content : String, suggestions : List String, targetPage : Page }
 getQuestionForProgress furthestQuestion =
     case furthestQuestion of
         1 ->
             { content = "What is your business model: a SaaS platform or a Marketplace?"
             , suggestions = [ "SaaS platform", "Marketplace", "I'm not sure" ]
-            , questionNumber = 1
             , targetPage = BusinessModel
             }
         2 ->
             { content = "How do you want to collect and pay for fees?"
             , suggestions = [ "Seller pays fees", "You pay fees", "What are the benefits?" ]
-            , questionNumber = 2
             , targetPage = BusinessModel
             }
         3 ->
             { content = "How do you want your users to onboard to your platform?"
             , suggestions = [ "With a Stripe-hosted onboarding flow", "With an embedded onboarding flow", "I want to build my own onboarding flow" ]
-            , questionNumber = 3
             , targetPage = Onboarding
             }
         4 ->
             { content = "How will buyers pay your sellers: With Stripe-hosted Checkout, embedded components on your site, or with payment links?"
             , suggestions = [ "Use Checkout", "Embed components into my site", "Use payment links" ]
-            , questionNumber = 4
             , targetPage = Checkout
             }
         5 ->
             { content = "How will sellers manage their account: with the Stripe Dashboard or embedded components on your site?"
             , suggestions = [ "Stripe Dashboard", "Embedded components", "I'm not sure" ]
-            , questionNumber = 5
             , targetPage = Dashboard
             }
         _ ->
             { content = "Great! We've covered all the main questions. Is there anything specific you'd like to review or modify?"
             , suggestions = [ "Review business model", "Review onboarding", "Review checkout", "Review dashboard" ]
-            , questionNumber = 5
             , targetPage = Dashboard
             }
 
@@ -803,6 +842,37 @@ getProgressDescription furthestQuestion =
         _ ->
             "your integration"
 
+-- Function to detect if a response is decisive vs informational
+isDecisiveAnswer : Int -> String -> Bool
+isDecisiveAnswer questionNumber response =
+    let
+        lowerResponse = String.toLower (String.trim response)
+    in
+    case questionNumber of
+        1 -> -- Business Model question
+            List.any (\keyword -> String.contains keyword lowerResponse)
+                [ "saas platform", "marketplace", "saas", "platform" ]
+                
+        2 -> -- Fees question  
+            List.any (\keyword -> String.contains keyword lowerResponse)
+                [ "seller pays", "you pay", "platform pays", "fees" ]
+                
+        3 -> -- Onboarding question
+            List.any (\keyword -> String.contains keyword lowerResponse)
+                [ "stripe-hosted", "embedded", "build my own", "onboarding" ]
+                
+        4 -> -- Checkout question
+            List.any (\keyword -> String.contains keyword lowerResponse)
+                [ "checkout", "embed components", "payment links", "hosted" ]
+                
+        5 -> -- Dashboard question
+            List.any (\keyword -> String.contains keyword lowerResponse)
+                [ "stripe dashboard", "embedded components", "dashboard" ]
+                
+        _ -> False
+
+
+
 -- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -851,11 +921,35 @@ onClickNoPropagate : msg -> Html.Attribute msg
 onClickNoPropagate msg =
     stopPropagationOn "click" (D.succeed (msg, True))
 
-viewContextItem : Page -> Page -> Html Msg
-viewContextItem currentPage itemPage =
+-- Handle Enter key to submit message
+onEnterKey : msg -> Html.Attribute msg
+onEnterKey msg =
+    let
+        isEnter code =
+            if code == 13 then
+                D.succeed msg
+            else
+                D.fail "not ENTER"
+    in
+    Html.Events.on "keydown" (D.andThen isEnter (D.field "keyCode" D.int))
+
+viewContextItem : Page -> Page -> Int -> Html Msg
+viewContextItem currentPage itemPage furthestQuestionReached =
+    let
+        requiredQuestionNumber = pageToQuestionNumber itemPage
+        isEnabled = furthestQuestionReached >= requiredQuestionNumber
+        isSelected = currentPage == itemPage
+    in
     div [ class "context-picker-item"
-        , classList [ ("context-picker-item-selected", currentPage == itemPage) ]
-        , onClickNoPropagate (SelectContext itemPage)
+        , classList 
+            [ ("context-picker-item-selected", isSelected)
+            , ("context-picker-item-disabled", not isEnabled)
+            ]
+        , if isEnabled then
+            onClickNoPropagate (SelectContext itemPage)
+          else
+            -- Don't add click handler for disabled items
+            style "" ""
         ]
         [ text (contextTextForPage itemPage) ]
 
@@ -1088,6 +1182,7 @@ viewInput page model =
             [ textarea
                 [ value model.inputText
                 , onInput InputChanged
+                , onEnterKey SendMessage
                 , placeholder "Ask a question..."
                 , class "chat-input"
                 ]
@@ -1104,11 +1199,11 @@ viewInput page model =
                     text ""
                 , if model.contextMenuOpen then
                     div [ class "context-picker-expanded" ]
-                        [ viewContextItem page BusinessModel
-                        , viewContextItem page Onboarding
-                        , viewContextItem page Checkout
-                        , viewContextItem page Dashboard
-                        , viewContextItem page IntegrationOverview
+                        [ viewContextItem page BusinessModel model.furthestQuestionReached
+                        , viewContextItem page Onboarding model.furthestQuestionReached
+                        , viewContextItem page Checkout model.furthestQuestionReached
+                        , viewContextItem page Dashboard model.furthestQuestionReached
+                        , viewContextItem page IntegrationOverview model.furthestQuestionReached
                         ]
                   else
                     text ""
