@@ -40,6 +40,7 @@ type alias Model =
     , page : Page
     , chat : Chat.Model
     , codeEditorTab : String
+    , hoveredSample : Maybe String
     }
 
 type Page
@@ -73,6 +74,7 @@ init _ url key =
       , page = initialPage
       , chat = chatModel
       , codeEditorTab = "App.jsx"
+      , hoveredSample = Nothing
       }
     , Cmd.batch
         [ Cmd.map ChatMsg chatCmd
@@ -168,10 +170,36 @@ update msg model =
                         Chat.HandleManualNavigationOut page ->
                             Nav.pushUrl model.key (chatPageToMainPage page)
                         
+                        Chat.HoverSuggestedResponseOut response ->
+                            Cmd.none
+                        
+                        Chat.StopHoverSuggestedResponseOut ->
+                            Cmd.none
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
-            ( { model | chat = chatModel }
+            let
+                updatedModel = case outMsg of
+                    Chat.HoverSuggestedResponseOut response ->
+                        -- Only update for business model responses on the business model page
+                        if model.page == BusinessModel then
+                            if response == "SaaS platform" then
+                                { model | chat = chatModel, hoveredSample = Just "sample-platform" }
+                            else if response == "Marketplace" then
+                                { model | chat = chatModel, hoveredSample = Just "sample-marketplace" }
+                            else
+                                { model | chat = chatModel }
+                        else
+                            { model | chat = chatModel }
+                    
+                    Chat.StopHoverSuggestedResponseOut ->
+                        { model | chat = chatModel }  -- Keep current hover state, don't reset
+                    
+                    _ ->
+                        { model | chat = chatModel }
+            in
+            ( updatedModel
             , Cmd.batch
                 [ Cmd.map ChatMsg chatCmd
                 , outCmd
@@ -208,10 +236,36 @@ update msg model =
                                 Chat.HandleManualNavigationOut page ->
                                     Nav.pushUrl model.key (chatPageToMainPage page)
                                 
+                                Chat.HoverSuggestedResponseOut response ->
+                                    Cmd.none
+                                
+                                Chat.StopHoverSuggestedResponseOut ->
+                                    Cmd.none
+                                
                                 Chat.NoOut ->
                                     Cmd.none
                     in
-                    ( { model | chat = chatModel }
+                    let
+                        updatedModel = case outMsg of
+                            Chat.HoverSuggestedResponseOut response ->
+                                -- Only update for business model responses on the business model page
+                                if model.page == BusinessModel then
+                                    if response == "SaaS platform" then
+                                        { model | chat = chatModel, hoveredSample = Just "sample-platform" }
+                                    else if response == "Marketplace" then
+                                        { model | chat = chatModel, hoveredSample = Just "sample-marketplace" }
+                                    else
+                                        { model | chat = chatModel }
+                                else
+                                    { model | chat = chatModel }
+                            
+                            Chat.StopHoverSuggestedResponseOut ->
+                                { model | chat = chatModel }  -- Keep current hover state, don't reset
+                            
+                            _ ->
+                                { model | chat = chatModel }
+                    in
+                    ( updatedModel
                     , Cmd.batch
                         [ Cmd.map ChatMsg chatCmd
                         , outCmd
@@ -265,10 +319,36 @@ update msg model =
                         Chat.HandleManualNavigationOut chatPage ->
                             Nav.pushUrl model.key (chatPageToMainPage chatPage)
                         
+                        Chat.HoverSuggestedResponseOut response ->
+                            Cmd.none
+                        
+                        Chat.StopHoverSuggestedResponseOut ->
+                            Cmd.none
+                        
                         Chat.NoOut ->
                             Cmd.none
             in
-            ( { model | chat = chatModel, page = page }
+            let
+                updatedModel = case outMsg of
+                    Chat.HoverSuggestedResponseOut response ->
+                        -- Only update for business model responses on the business model page
+                        if page == BusinessModel then
+                            if response == "SaaS platform" then
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-platform" }
+                            else if response == "Marketplace" then
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-marketplace" }
+                            else
+                                { model | chat = chatModel, page = page }
+                        else
+                            { model | chat = chatModel, page = page }
+                    
+                    Chat.StopHoverSuggestedResponseOut ->
+                        { model | chat = chatModel, page = page }  -- Keep current hover state, don't reset
+                    
+                    _ ->
+                        { model | chat = chatModel, page = page }
+            in
+            ( updatedModel
             , Cmd.batch
                 [ Cmd.map ChatMsg chatCmd
                 , outCmd
@@ -440,7 +520,7 @@ viewPage model =
             div [ class "integration-page" ]
                 [ viewIntegrationHeader model
                 , div [ class "integration-content business-model-content" ]
-                    [ viewBusinessModel ]
+                    [ viewBusinessModel model.hoveredSample ]
                 , viewIntegrationFooter
                 ]
 
@@ -523,12 +603,22 @@ viewHome =
         [ 
         ]
 
-viewBusinessModel : Html msg
-viewBusinessModel =
+viewBusinessModel : Maybe String -> Html msg
+viewBusinessModel hoveredSample =
+    let
+        imagePath = case hoveredSample of
+            Just "sample-marketplace" -> "/images/sample-marketplace.svg"
+            Just "sample-platform" -> "/images/sample-platform.svg"
+            _ -> "/images/sample-platform.svg"  -- Default to platform
+        
+        altText = case hoveredSample of
+            Just "sample-marketplace" -> "Sample Marketplace"
+            _ -> "Sample Platform"
+    in
     div [ style "width" "100%", style "height" "100%", style "display" "flex", style "align-items" "center", style "justify-content" "center" ]
         [ img 
-            [ src "/images/sample-platform.svg"
-            , alt "Sample Platform"
+            [ src imagePath
+            , alt altText
             , style "max-width" "100%"
             , style "max-height" "100%"
             , style "object-fit" "contain"

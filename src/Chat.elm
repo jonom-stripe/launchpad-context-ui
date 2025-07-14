@@ -29,6 +29,8 @@ type OutMsg
     | ScrollToBottomOut
     | NavigateToOptimalTabOut Page
     | HandleManualNavigationOut Page
+    | HoverSuggestedResponseOut String
+    | StopHoverSuggestedResponseOut
     | NoOut
 
 type Page
@@ -75,6 +77,8 @@ type Msg
     | AnimateText Message
     | ShowNextChar Message
     | SelectSuggestedResponse String
+    | HoverSuggestedResponse String
+    | StopHoverSuggestedResponse
     | AnimateResponses Message
     | ShowNextResponse Message
     | RemoveResponses Message
@@ -341,7 +345,9 @@ update msg model =
                 -- Check if this is a contextual response we should handle locally
                 isContextualResponse = 
                     String.contains "Let's continue setting up" response ||
-                    String.contains "I'd like to make changes to my" response
+                    String.contains "I'd like to make changes to my" response ||
+                    String.contains "Edit my integration" response ||
+                    String.contains "Walk me through the codebase" response
 
                 updateMessage message =
                     if not message.isUser then
@@ -400,6 +406,18 @@ update msg model =
                 Nothing ->
                     Cmd.none
             , outMsg
+            )
+
+        HoverSuggestedResponse response ->
+            ( model
+            , Cmd.none
+            , HoverSuggestedResponseOut response
+            )
+
+        StopHoverSuggestedResponse ->
+            ( model
+            , Cmd.none
+            , StopHoverSuggestedResponseOut
             )
 
         AnimateResponses message ->
@@ -470,7 +488,9 @@ update msg model =
                     case message.selectedResponse of
                         Just response ->
                             String.contains "Let's continue setting up" response ||
-                            String.contains "I'd like to make changes to my" response
+                            String.contains "I'd like to make changes to my" response ||
+                            String.contains "Edit my integration" response ||
+                            String.contains "Walk me through the codebase" response
                         Nothing ->
                             False
 
@@ -526,6 +546,31 @@ update msg model =
                                         Cmd.none
                                     , NoOut
                                     )
+                                else if String.contains "Edit my integration" response then
+                                    -- Handle "edit integration" locally - same as API response
+                                    ( if shouldAddFollowUp then
+                                        let
+                                            editContent = "I'd be happy to help you edit your integration setup. What would you like to modify?"
+                                            editSuggestions = ["Business model", "Onboarding", "Checkout", "Dashboard"]
+                                            aiFollowUp = createNextQuestionMessage editContent editSuggestions (1 + List.length model.messages)
+                                        in
+                                        Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
+                                      else
+                                        Cmd.none
+                                    , NoOut
+                                    )
+                                else if String.contains "Walk me through the codebase" response then
+                                    -- Handle "codebase walkthrough" locally
+                                    ( if shouldAddFollowUp then
+                                        let
+                                            walkthroughContent = "I'd love to walk you through the codebase! This feature is coming soon - we're building an interactive code exploration experience."
+                                            aiFollowUp = createNextQuestionMessage walkthroughContent [] (1 + List.length model.messages)
+                                        in
+                                        Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
+                                      else
+                                        Cmd.none
+                                    , NoOut
+                                    )
                                 else
                                     -- Regular response already sent to API by SelectSuggestedResponse
                                     ( Cmd.none
@@ -563,6 +608,12 @@ update msg model =
                                             questionInfo = getQuestionForProgress model.currentQuestionNumber
                                         in
                                         (questionInfo.content, questionInfo.suggestions)
+                                    else if String.contains "Edit my integration" selectedResponse then
+                                        ("I'd be happy to help you edit your integration setup. What would you like to modify?", 
+                                         ["Business model", "Onboarding", "Checkout", "Dashboard"])
+                                    else if String.contains "Walk me through the codebase" selectedResponse then
+                                        ("I'd love to walk you through the codebase! This feature is coming soon - we're building an interactive code exploration experience.", 
+                                         [])
                                     else
                                         getQuestionForSection selectedResponse
                                 
@@ -825,7 +876,7 @@ getQuestionForProgress furthestQuestion =
             }
         _ ->
             { content = "Great! We've covered all the main questions. Is there anything specific you'd like to review or modify?"
-            , suggestions = [ "Review business model", "Review onboarding", "Review checkout", "Review dashboard" ]
+            , suggestions = [ "Edit my integration", "Walk me through the codebase" ]
             , targetPage = Dashboard
             }
 
@@ -1181,6 +1232,8 @@ viewSuggestedResponse message index response =
             )
         , style "animation-duration" "0.15s"
         , Html.Events.onClick (SelectSuggestedResponse response)
+        , Html.Events.onMouseEnter (HoverSuggestedResponse response)
+        , Html.Events.onMouseLeave StopHoverSuggestedResponse
         ]
         [ text response ]
 

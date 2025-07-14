@@ -43,7 +43,7 @@ RULES:
 - For informational requests (like "I'm not sure", "What are the benefits?", or any question): First provide a detailed explanation of the options, then re-ask the SAME question with the same suggested responses
 - Only move to the next question after the user gives a decisive answer
 - Format responses as JSON: {"content": "Your response", "suggestedResponses": ["option1", "option2", "option3"]}
-- After all 5 questions are answered, provide a summary of their choices
+- After all 5 questions are answered, provide a summary of their choices and offer: ["Edit my integration", "Walk me through the codebase"]
 
 EXAMPLES:
 - If user says "SaaS platform" to business model question: {"content": "Great choice! A SaaS platform is perfect for subscription-based services. How do you want to collect and pay for fees?", "suggestedResponses": ["Seller pays fees", "You pay fees", "What are the benefits?"]}
@@ -69,6 +69,15 @@ export async function sendMessage(message) {
     
     if (message.includes("Let's continue setting up")) {
       return handleContinueRequest();
+    }
+
+    // Handle completion flow responses  
+    if (message.includes("Edit my integration")) {
+      return handleEditIntegrationRequest();
+    }
+    
+    if (message.includes("Walk me through the codebase")) {
+      return handleCodebaseWalkthrough();
     }
 
     // Add user message to history
@@ -200,8 +209,31 @@ function handleContinueRequest() {
   } else {
     return {
       content: "It looks like we've covered all the main setup questions! Would you like to review any specific section or do you have other questions about your Stripe integration?",
-      suggestedResponses: ["Review business model", "Review onboarding", "Review checkout", "Review dashboard"],
+      suggestedResponses: ["Edit my integration", "Walk me through the codebase"],
       error: null
     };
   }
+} 
+
+// Handle "Edit my integration" request
+function handleEditIntegrationRequest() {
+  return {
+    content: "I'd be happy to help you edit your integration setup. What would you like to modify?",
+    suggestedResponses: [
+      "Business model", 
+      "Onboarding", 
+      "Checkout", 
+      "Dashboard"
+    ],
+    error: null
+  };
+}
+
+// Handle "Walk me through the codebase" request  
+function handleCodebaseWalkthrough() {
+  return {
+    content: "I'd love to walk you through the codebase! This feature is coming soon - we're building an interactive code exploration experience.",
+    suggestedResponses: [],
+    error: null
+  };
 } 
