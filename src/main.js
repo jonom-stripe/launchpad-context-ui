@@ -147,5 +147,5 @@ if (app.ports && app.ports.requestSuggestionsPosition) {
       });
     });
   }
-  
+
     

@@ -51,3 +51,47 @@
 .nav-link .nav-icon img {
     fill: #474E5A;
 } 
+
+.footer-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.footer-button:hover:not(.footer-button-disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.footer-button-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.footer-button-icon {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.footer-button-disabled .footer-button-icon {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.footer-button-text {
+  font-family: 'SF Pro Text', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.footer-button-disabled .footer-button-text {
+  color: rgba(255, 255, 255, 0.4);
+} 

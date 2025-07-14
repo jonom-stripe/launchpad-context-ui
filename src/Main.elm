@@ -41,6 +41,7 @@ type alias Model =
     , chat : Chat.Model
     , codeEditorTab : String
     , hoveredSample : Maybe String
+    , showingSourceCode : Bool
     }
 
 type Page
@@ -75,6 +76,7 @@ init _ url key =
       , chat = chatModel
       , codeEditorTab = "App.jsx"
       , hoveredSample = Nothing
+      , showingSourceCode = False
       }
     , Cmd.batch
         [ Cmd.map ChatMsg chatCmd
@@ -109,6 +111,7 @@ type Msg
     | CodeEditorTabClicked String
     | SuggestionsPositionReceived Int
     | ManualTabClicked Page
+    | ViewSourceClicked
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -355,6 +358,9 @@ update msg model =
                 ]
             )
 
+        ViewSourceClicked ->
+            ( { model | showingSourceCode = not model.showingSourceCode }, Cmd.none )
+
 -- HELPERS
 
 pageToChat : Page -> Chat.Page
@@ -499,70 +505,85 @@ pageToUrl page =
 
 viewPage : Model -> Html Msg
 viewPage model =
-    case model.page of
-        Home ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewHome ]
-                , viewIntegrationFooter
-                ]
+    if model.showingSourceCode then
+        div [ class "integration-page" ]
+            [ viewIntegrationHeader model
+            , div [ class "integration-content" ]
+                [ viewCode model ]
+            , viewIntegrationFooter model.page model.showingSourceCode
+            ]
+    else
+        case model.page of
+            Home ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewHome ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        Code ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewCode model ]
-                , viewIntegrationFooter
-                ]
+            Code ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewCode model ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        BusinessModel ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content business-model-content" ]
-                    [ viewBusinessModel model.hoveredSample ]
-                , viewIntegrationFooter
-                ]
+            BusinessModel ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content business-model-content" ]
+                        [ viewBusinessModel model.hoveredSample ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        Onboarding ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewOnboarding ]
-                , viewIntegrationFooter
-                ]
+            Onboarding ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewOnboarding ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        Checkout ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewCheckout ]
-                , viewIntegrationFooter
-                ]
+            Checkout ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewCheckout ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        Dashboard ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewDashboard ]
-                , viewIntegrationFooter
-                ]
+            Dashboard ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewDashboard ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        IntegrationOverview ->
-            div [ class "integration-page" ]
-                [ viewIntegrationHeader model
-                , div [ class "integration-content" ]
-                    [ viewIntegrationOverview ]
-                , viewIntegrationFooter
-                ]
+            IntegrationOverview ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ viewIntegrationOverview ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
-        NotFound ->
-            viewNotFound
+            NotFound ->
+                div [ class "integration-page" ]
+                    [ viewIntegrationHeader model
+                    , div [ class "integration-content" ]
+                        [ text "Page not found" ]
+                    , viewIntegrationFooter model.page model.showingSourceCode
+                    ]
 
 viewIntegrationHeader : Model -> Html Msg
 viewIntegrationHeader model =
     let
         furthestProgress = model.chat.furthestQuestionReached
+        
+        isShowingCode = model.showingSourceCode
         
         visibleTabs = []
             ++ (if furthestProgress >= 1 then 
@@ -583,7 +604,7 @@ viewIntegrationHeader model =
                     [])
     in
     div [ class "integration-header" ]
-        [ div [ class "integration-tabs" ] visibleTabs
+        [ div [ class "integration-tabs", classList [ ("integration-tabs-code", isShowingCode) ] ] visibleTabs
         , div [ class "integration-header-space" ] []
         ]
 
@@ -1014,20 +1035,28 @@ subscriptions model =
         , suggestionsPositionReceived SuggestionsPositionReceived
         ]
 
-viewIntegrationFooter : Html Msg
-viewIntegrationFooter =
+viewIntegrationFooter : Page -> Bool -> Html Msg
+viewIntegrationFooter currentPage showingSourceCode =
+    let
+        shouldHideViewSource = 
+            currentPage == BusinessModel || currentPage == Dashboard
+        
+        buttonText = if showingSourceCode then "Show UI" else "View source"
+    in
     div [ class "integration-footer" ]
         [ div [ class "footer-actions" ]
-            [ button [ class "footer-button" ]
-                [ div [ class "footer-button-icon" ]
-                    [ text "􀍟" ]
-                , span [ class "footer-button-text" ] [ text "Edit" ]
+            (if shouldHideViewSource then
+                []
+            else
+                [ button 
+                    [ class "footer-button"
+                    , onClick ViewSourceClicked
+                    ]
+                    [ div [ class "footer-button-icon" ]
+                        [ text "􀪏" ]
+                    , span [ class "footer-button-text" ] [ text buttonText ]
+                    ]
                 ]
-            , button [ class "footer-button footer-button-disabled" ]
-                [ div [ class "footer-button-icon" ]
-                    [ text "􀪏" ]
-                , span [ class "footer-button-text" ] [ text "View source" ]
-                ]
-            ]
+            )
         ]
 
