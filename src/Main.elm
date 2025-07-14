@@ -357,19 +357,19 @@ update msg model =
                         -- Only update for business model responses on the business model page
                         if page == BusinessModel then
                             if response == "SaaS platform" then
-                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-platform" }
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-platform", showingSourceCode = False }
                             else if response == "Marketplace" then
-                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-marketplace" }
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-marketplace", showingSourceCode = False }
                             else
-                                { model | chat = chatModel, page = page }
+                                { model | chat = chatModel, page = page, showingSourceCode = False }
                         else
-                            { model | chat = chatModel, page = page }
+                            { model | chat = chatModel, page = page, showingSourceCode = False }
                     
                     Chat.StopHoverSuggestedResponseOut ->
-                        { model | chat = chatModel, page = page }  -- Keep current hover state, don't reset
+                        { model | chat = chatModel, page = page, showingSourceCode = False }  -- Keep current hover state, don't reset
                     
                     _ ->
-                        { model | chat = chatModel, page = page }
+                        { model | chat = chatModel, page = page, showingSourceCode = False }
             in
             ( updatedModel
             , Cmd.batch

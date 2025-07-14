@@ -508,26 +508,11 @@ update msg model =
                                 if String.contains "Let's continue setting up" response then
                                     -- Handle "continue" locally with proper navigation and scroll to bottom
                                     let
-                                        questionInfo = getQuestionForProgress model.currentQuestionNumber
+                                        questionInfo = getQuestionForProgress model.furthestQuestionReached
                                     in
                                     ( Cmd.batch
                                         [ Process.sleep 200  -- Small delay to ensure navigation completes
                                             |> Task.perform (\_ -> ScrollAfterDelay)
-                                        , if shouldAddFollowUp then
-                                            -- Start typing animation for the new AI follow-up message
-                                            let
-                                                selectedResponse = response
-                                                (questionContent, questionSuggestions) = 
-                                                    let
-                                                        questionData = getQuestionForProgress model.currentQuestionNumber
-                                                    in
-                                                    (questionData.content, questionData.suggestions)
-                                                
-                                                aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (1 + List.length model.messages)
-                                            in
-                                            Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
-                                          else
-                                            Cmd.none
                                         ]
                                     , NavigateToOptimalTabOut questionInfo.targetPage
                                     )
@@ -562,14 +547,7 @@ update msg model =
                                     )
                                 else if String.contains "Walk me through the codebase" response then
                                     -- Handle "codebase walkthrough" locally and navigate to Onboarding with code view
-                                    ( if shouldAddFollowUp then
-                                        let
-                                            walkthroughContent = "Let me walk you through the codebase! I'm now showing you the App.jsx file, which is the main component that brings everything together. This React component imports Stripe's loadStripe function and sets up the payment flow. You can see how we initialize Stripe with your publishable key, create the checkout session, and handle the payment elements. The component structure shows a clean separation between the payment form and the backend integration."
-                                            aiFollowUp = createNextQuestionMessage walkthroughContent [] (1 + List.length model.messages)
-                                        in
-                                        Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
-                                      else
-                                        Cmd.none
+                                    ( Cmd.none
                                     , NavigateToPageWithCodeViewOut Onboarding
                                     )
                                 else
@@ -606,21 +584,21 @@ update msg model =
                                 (questionContent, questionSuggestions) = 
                                     if String.contains "Let's continue setting up" selectedResponse then
                                         let
-                                            questionInfo = getQuestionForProgress model.currentQuestionNumber
+                                            questionInfo = getQuestionForProgress model.furthestQuestionReached
                                         in
                                         (questionInfo.content, questionInfo.suggestions)
                                     else if String.contains "Edit my integration" selectedResponse then
                                         ("I'd be happy to help you edit your integration setup. What would you like to modify?", 
                                          ["Business model", "Onboarding", "Checkout", "Dashboard"])
                                     else if String.contains "Walk me through the codebase" selectedResponse then
-                                        -- This is handled by immediate response, don't duplicate here
-                                        ("", [])
+                                        ("Let me walk you through the codebase! I'm now showing you the App.jsx file, which is the main component that brings everything together. This React component imports Stripe's loadStripe function and sets up the payment flow. You can see how we initialize Stripe with your publishable key, create the checkout session, and handle the payment elements. The component structure shows a clean separation between the payment form and the backend integration.", 
+                                         ["Show me the checkout flow", "Explain the server setup", "What about error handling?"])
                                     else
                                         getQuestionForSection selectedResponse
                                 
-                                aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (List.length (userMessage :: (updateMessages model.messages)))
+                                aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (List.length updatedMessagesWithUser)
                                 
-                                finalMessages = updatedMessagesWithUser ++ [ aiFollowUp ]
+                                finalMessages = aiFollowUp :: updatedMessagesWithUser
                                 
                                 -- For "Walk me through the codebase", we need to ensure animation happens after model update
                                 isCodebaseWalkthrough = String.contains "Walk me through the codebase" selectedResponse
@@ -635,15 +613,9 @@ update msg model =
                     else
                         updateMessages model.messages
               }
-            , if shouldAddFollowUp && not (String.contains "Walk me through the codebase" (Maybe.withDefault "" message.selectedResponse)) then
+            , if updatedMessage.visibleResponses <= 0 && shouldAddFollowUp then
                 let
                     selectedResponse = Maybe.withDefault "" message.selectedResponse
-                    (questionContent, questionSuggestions) = 
-                        if String.contains "Walk me through the codebase" selectedResponse then
-                            ("Let me walk you through the codebase! I'm now showing you the App.jsx file, which is the main component that brings everything together. This React component imports Stripe's loadStripe function and sets up the payment flow. You can see how we initialize Stripe with your publishable key, create the checkout session, and handle the payment elements. The component structure shows a clean separation between the payment form and the backend integration.", 
-                             [])
-                        else
-                            ("", [])
                     
                     userMessage =
                         { id = String.fromInt (List.length model.messages)
@@ -657,14 +629,38 @@ update msg model =
                         , removingResponses = False
                         }
                     
-                    aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (List.length (userMessage :: (updateMessages model.messages)))
+                    updatedMessagesWithUser = userMessage :: (updateMessages model.messages)
+                    
+                    (questionContent, questionSuggestions) = 
+                        if String.contains "Let's continue setting up" selectedResponse then
+                            let
+                                questionInfo = getQuestionForProgress model.furthestQuestionReached
+                            in
+                            (questionInfo.content, questionInfo.suggestions)
+                        else if String.contains "Edit my integration" selectedResponse then
+                            ("I'd be happy to help you edit your integration setup. What would you like to modify?", 
+                             ["Business model", "Onboarding", "Checkout", "Dashboard"])
+                        else if String.contains "Walk me through the codebase" selectedResponse then
+                            ("Let me walk you through the codebase! I'm now showing you the App.jsx file, which is the main component that brings everything together. This React component imports Stripe's loadStripe function and sets up the payment flow. You can see how we initialize Stripe with your publishable key, create the checkout session, and handle the payment elements. The component structure shows a clean separation between the payment form and the backend integration.", 
+                             ["Show me the checkout flow", "Explain the server setup", "What about error handling?"])
+                        else
+                            getQuestionForSection selectedResponse
+                    
+                    -- Use the same ID calculation as in the model update section
+                    aiFollowUp = createNextQuestionMessage questionContent questionSuggestions (List.length updatedMessagesWithUser)
                 in
-                Cmd.batch 
-                    [ Task.perform (\_ -> AnimateText aiFollowUp) (Task.succeed ())
+                Cmd.batch
+                    [ Process.sleep 50
+                        |> Task.perform (\_ -> AnimateText aiFollowUp)
+                    , -- For walkthrough message, ensure scrolling after animation completes
+                      if String.contains "Walk me through the codebase" selectedResponse then
+                        Task.perform (\_ -> ScrollAfterDelay) (Task.succeed ())
+                      else
+                        Cmd.none
                     ]
               else
                 nextCmd
-            , if shouldAddFollowUp && not (String.contains "Walk me through the codebase" (Maybe.withDefault "" message.selectedResponse)) then
+            , if String.contains "Walk me through the codebase" (Maybe.withDefault "" message.selectedResponse) then
                 NavigateToPageWithCodeViewOut Onboarding
               else
                 outMsg
