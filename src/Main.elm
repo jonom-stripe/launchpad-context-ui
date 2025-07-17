@@ -193,7 +193,7 @@ update msg model =
             let
                 updatedModel = case outMsg of
                     Chat.HoverSuggestedResponseOut response ->
-                        -- Only update for business model responses on the business model page
+                        -- Handle hover for business model responses on the business model page
                         if model.page == BusinessModel then
                             if response == "SaaS platform" then
                                 { model | chat = chatModel, hoveredSample = Just "sample-platform" }
@@ -201,6 +201,12 @@ update msg model =
                                 { model | chat = chatModel, hoveredSample = Just "sample-marketplace" }
                             else
                                 { model | chat = chatModel }
+                        -- Handle hover for onboarding responses on the onboarding page
+                        else if model.page == Onboarding then
+                            if String.contains "embedded onboarding flow" (String.toLower response) then
+                                { model | chat = chatModel, hoveredSample = Just "sample-onboarding-embedded" }
+                            else
+                                { model | chat = chatModel, hoveredSample = Nothing }
                         else
                             { model | chat = chatModel }
                     
@@ -265,7 +271,7 @@ update msg model =
                     let
                         updatedModel = case outMsg of
                             Chat.HoverSuggestedResponseOut response ->
-                                -- Only update for business model responses on the business model page
+                                -- Handle hover for business model responses on the business model page
                                 if model.page == BusinessModel then
                                     if response == "SaaS platform" then
                                         { model | chat = chatModel, hoveredSample = Just "sample-platform" }
@@ -273,6 +279,12 @@ update msg model =
                                         { model | chat = chatModel, hoveredSample = Just "sample-marketplace" }
                                     else
                                         { model | chat = chatModel }
+                                -- Handle hover for onboarding responses on the onboarding page
+                                else if model.page == Onboarding then
+                                    if String.contains "embedded onboarding flow" (String.toLower response) then
+                                        { model | chat = chatModel, hoveredSample = Just "sample-onboarding-embedded" }
+                                    else
+                                        { model | chat = chatModel, hoveredSample = Nothing }
                                 else
                                     { model | chat = chatModel }
                             
@@ -354,7 +366,7 @@ update msg model =
             let
                 updatedModel = case outMsg of
                     Chat.HoverSuggestedResponseOut response ->
-                        -- Only update for business model responses on the business model page
+                        -- Handle hover for business model responses on the business model page
                         if page == BusinessModel then
                             if response == "SaaS platform" then
                                 { model | chat = chatModel, page = page, hoveredSample = Just "sample-platform", showingSourceCode = False }
@@ -362,6 +374,12 @@ update msg model =
                                 { model | chat = chatModel, page = page, hoveredSample = Just "sample-marketplace", showingSourceCode = False }
                             else
                                 { model | chat = chatModel, page = page, showingSourceCode = False }
+                        -- Handle hover for onboarding responses on the onboarding page
+                        else if page == Onboarding then
+                            if String.contains "embedded onboarding flow" (String.toLower response) then
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-onboarding-embedded", showingSourceCode = False }
+                            else
+                                { model | chat = chatModel, page = page, hoveredSample = Nothing, showingSourceCode = False }
                         else
                             { model | chat = chatModel, page = page, showingSourceCode = False }
                     
@@ -565,7 +583,7 @@ viewPage model =
                 div [ class "integration-page" ]
                     [ viewIntegrationHeader model
                     , div [ class "integration-content" ]
-                        [ viewOnboarding ]
+                        [ viewOnboarding model.hoveredSample ]
                     , viewIntegrationFooter model.page model.showingSourceCode
                     ]
 
@@ -608,21 +626,23 @@ viewIntegrationHeader model =
         
         isShowingCode = model.showingSourceCode
         
+        isEmbeddedOnboarding = model.page == Onboarding && model.hoveredSample == Just "sample-onboarding-embedded"
+        
         visibleTabs = []
             ++ (if furthestProgress >= 1 then 
-                    [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) BusinessModel ]
+                    [ viewIntegrationTab "Business model" "􁽇" (model.page == BusinessModel) BusinessModel False ]
                 else 
                     [])
             ++ (if furthestProgress >= 3 then 
-                    [ viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) Onboarding ]
+                    [ viewIntegrationTab "Onboarding" "􀉭" (model.page == Onboarding) Onboarding isEmbeddedOnboarding ]
                 else 
                     [])
             ++ (if furthestProgress >= 4 then 
-                    [ viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) Checkout ]
+                    [ viewIntegrationTab "Checkout" "􀍰" (model.page == Checkout) Checkout False ]
                 else 
                     [])
             ++ (if furthestProgress >= 5 then 
-                    [ viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard ]
+                    [ viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard False ]
                 else 
                     [])
     in
@@ -631,13 +651,36 @@ viewIntegrationHeader model =
         , div [ class "integration-header-space" ] []
         ]
 
-viewIntegrationTab : String -> String -> Bool -> Page -> Html Msg
-viewIntegrationTab title iconSymbol isActive page =
-    div [ class "integration-tab", classList [ ("active", isActive) ], onClick (ManualTabClicked page) ]
+viewIntegrationTab : String -> String -> Bool -> Page -> Bool -> Html Msg
+viewIntegrationTab title iconSymbol isActive page isWhiteTheme =
+    let
+        tabClasses = [ ("active", isActive), ("white-theme", isWhiteTheme) ]
+        tabStyles = 
+            if isWhiteTheme then
+                [ style "background-color" "white"
+                , style "color" "#1a1a1a"
+                , style "border-color" "#e6e6e6"
+                ]
+            else
+                []
+        
+        iconStyles = 
+            if isWhiteTheme then
+                [ style "color" "#1a1a1a" ]
+            else
+                []
+        
+        textStyles = 
+            if isWhiteTheme then
+                [ style "color" "#1a1a1a" ]
+            else
+                []
+    in
+    div ([ class "integration-tab", classList tabClasses, onClick (ManualTabClicked page) ] ++ tabStyles)
         [ div [ class "integration-tab-content" ]
-            [ div [ class "integration-tab-icon" ]
+            [ div ([ class "integration-tab-icon" ] ++ iconStyles)
                 [ text iconSymbol ]
-            , span [ class "integration-tab-text" ] [ text title ]
+            , span ([ class "integration-tab-text" ] ++ textStyles) [ text title ]
             ]
         ]
 
@@ -671,17 +714,56 @@ viewBusinessModel hoveredSample =
             []
         ]
 
-viewOnboarding : Html msg
-viewOnboarding =
-    div [ style "width" "100%", style "height" "100%", style "display" "flex", style "flex-direction" "column" ]
-        [ img 
-            [ src "/images/sample-onboarding.png"
-            , alt "Sample Onboarding"
-            , style "width" "100%"
-            , style "height" "auto"
-            , style "object-fit" "contain"
-            ]
-            []
+viewOnboarding : Maybe String -> Html msg
+viewOnboarding hoveredSample =
+    let
+        imagePath = case hoveredSample of
+            Just "sample-onboarding-embedded" -> "/images/sample-onboarding-embedded.png"
+            _ -> "/images/sample-onboarding-hosted.png"  -- Default to hosted
+        
+        altText = case hoveredSample of
+            Just "sample-onboarding-embedded" -> "Sample Embedded Onboarding"
+            _ -> "Sample Hosted Onboarding"
+        
+        isEmbedded = hoveredSample == Just "sample-onboarding-embedded"
+        
+        containerStyles = 
+            if isEmbedded then
+                [ style "width" "100%"
+                , style "min-height" "100%" 
+                , style "display" "flex"
+                , style "align-items" "flex-start"
+                , style "justify-content" "center"
+                , style "background-color" "white"
+                , style "padding" "20px"
+                , style "box-sizing" "border-box"
+                ]
+            else
+                [ style "width" "100%"
+                , style "height" "100%" 
+                , style "display" "flex"
+                , style "flex-direction" "column"
+                ]
+        
+        imageStyles = 
+            if isEmbedded then
+                [ src imagePath
+                , alt altText
+                , style "width" "750px"
+                , style "max-width" "calc(100% - 40px)"
+                , style "height" "auto"
+                , style "flex-shrink" "0"
+                ]
+            else
+                [ src imagePath
+                , alt altText
+                , style "width" "100%"
+                , style "height" "auto"
+                , style "object-fit" "contain"
+                ]
+    in
+    div containerStyles
+        [ img imageStyles []
         ]
 
 viewCheckout : Html msg
