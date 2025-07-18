@@ -207,6 +207,12 @@ update msg model =
                                 { model | chat = chatModel, hoveredSample = Just "sample-onboarding-embedded" }
                             else
                                 { model | chat = chatModel, hoveredSample = Nothing }
+                        -- Handle hover for dashboard responses on the dashboard page
+                        else if model.page == Dashboard then
+                            if String.contains "embedded components" (String.toLower response) then
+                                { model | chat = chatModel, hoveredSample = Just "sample-dashboard-embedded" }
+                            else
+                                { model | chat = chatModel, hoveredSample = Nothing }
                         else
                             { model | chat = chatModel }
                     
@@ -283,6 +289,12 @@ update msg model =
                                 else if model.page == Onboarding then
                                     if String.contains "embedded onboarding flow" (String.toLower response) then
                                         { model | chat = chatModel, hoveredSample = Just "sample-onboarding-embedded" }
+                                    else
+                                        { model | chat = chatModel, hoveredSample = Nothing }
+                                -- Handle hover for dashboard responses on the dashboard page
+                                else if model.page == Dashboard then
+                                    if String.contains "embedded components" (String.toLower response) then
+                                        { model | chat = chatModel, hoveredSample = Just "sample-dashboard-embedded" }
                                     else
                                         { model | chat = chatModel, hoveredSample = Nothing }
                                 else
@@ -378,6 +390,12 @@ update msg model =
                         else if page == Onboarding then
                             if String.contains "embedded onboarding flow" (String.toLower response) then
                                 { model | chat = chatModel, page = page, hoveredSample = Just "sample-onboarding-embedded", showingSourceCode = False }
+                            else
+                                { model | chat = chatModel, page = page, hoveredSample = Nothing, showingSourceCode = False }
+                        -- Handle hover for dashboard responses on the dashboard page
+                        else if page == Dashboard then
+                            if String.contains "embedded components" (String.toLower response) then
+                                { model | chat = chatModel, page = page, hoveredSample = Just "sample-dashboard-embedded", showingSourceCode = False }
                             else
                                 { model | chat = chatModel, page = page, hoveredSample = Nothing, showingSourceCode = False }
                         else
@@ -599,7 +617,7 @@ viewPage model =
                 div [ class "integration-page" ]
                     [ viewIntegrationHeader model
                     , div [ class "integration-content" ]
-                        [ viewDashboard ]
+                        [ viewDashboard model.hoveredSample ]
                     , viewIntegrationFooter model.page model.showingSourceCode
                     ]
 
@@ -627,6 +645,7 @@ viewIntegrationHeader model =
         isShowingCode = model.showingSourceCode
         
         isEmbeddedOnboarding = model.page == Onboarding && model.hoveredSample == Just "sample-onboarding-embedded"
+        isEmbeddedDashboard = model.page == Dashboard && model.hoveredSample == Just "sample-dashboard-embedded"
         
         visibleTabs = []
             ++ (if furthestProgress >= 1 then 
@@ -642,7 +661,7 @@ viewIntegrationHeader model =
                 else 
                     [])
             ++ (if furthestProgress >= 5 then 
-                    [ viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard False ]
+                    [ viewIntegrationTab "Dashboard" "􂆏" (model.page == Dashboard) Dashboard isEmbeddedDashboard ]
                 else 
                     [])
     in
@@ -655,10 +674,23 @@ viewIntegrationTab : String -> String -> Bool -> Page -> Bool -> Html Msg
 viewIntegrationTab title iconSymbol isActive page isWhiteTheme =
     let
         tabClasses = [ ("active", isActive), ("white-theme", isWhiteTheme) ]
+        
+        -- Determine background color based on page and theme
+        (backgroundColor, textColor) = 
+            if isWhiteTheme then
+                if page == Onboarding then
+                    ("white", "#1a1a1a")
+                else if page == Dashboard then
+                    ("#f8f9fa", "#1a1a1a")
+                else
+                    ("white", "#1a1a1a")
+            else
+                ("", "")
+        
         tabStyles = 
             if isWhiteTheme then
-                [ style "background-color" "white"
-                , style "color" "#1a1a1a"
+                [ style "background-color" backgroundColor
+                , style "color" textColor
                 , style "border-color" "#e6e6e6"
                 ]
             else
@@ -666,13 +698,13 @@ viewIntegrationTab title iconSymbol isActive page isWhiteTheme =
         
         iconStyles = 
             if isWhiteTheme then
-                [ style "color" "#1a1a1a" ]
+                [ style "color" textColor ]
             else
                 []
         
         textStyles = 
             if isWhiteTheme then
-                [ style "color" "#1a1a1a" ]
+                [ style "color" textColor ]
             else
                 []
     in
@@ -779,17 +811,56 @@ viewCheckout =
             []
         ]
 
-viewDashboard : Html msg
-viewDashboard =
-    div [ style "width" "100%", style "height" "100%", style "display" "flex", style "flex-direction" "column" ]
-        [ img 
-            [ src "/images/sample-dashboard.png"
-            , alt "Sample Dashboard"
-            , style "width" "100%"
-            , style "height" "auto"
-            , style "object-fit" "contain"
-            ]
-            []
+viewDashboard : Maybe String -> Html msg
+viewDashboard hoveredSample =
+    let
+        imagePath = case hoveredSample of
+            Just "sample-dashboard-embedded" -> "/images/sample-dashboard-embedded.png"
+            _ -> "/images/sample-dashboard-stripe.png"  -- Default to stripe
+        
+        altText = case hoveredSample of
+            Just "sample-dashboard-embedded" -> "Sample Embedded Dashboard"
+            _ -> "Sample Stripe Dashboard"
+        
+        isEmbedded = hoveredSample == Just "sample-dashboard-embedded"
+        
+        containerStyles = 
+            if isEmbedded then
+                [ style "width" "100%"
+                , style "min-height" "100%" 
+                , style "display" "flex"
+                , style "align-items" "flex-start"
+                , style "justify-content" "center"
+                , style "background-color" "#f8f9fa"
+                , style "padding" "20px"
+                , style "box-sizing" "border-box"
+                ]
+            else
+                [ style "width" "100%"
+                , style "height" "100%" 
+                , style "display" "flex"
+                , style "flex-direction" "column"
+                ]
+        
+        imageStyles = 
+            if isEmbedded then
+                [ src imagePath
+                , alt altText
+                , style "width" "740px"
+                , style "max-width" "calc(100% - 40px)"
+                , style "height" "auto"
+                , style "flex-shrink" "0"
+                ]
+            else
+                [ src imagePath
+                , alt altText
+                , style "width" "100%"
+                , style "height" "auto"
+                , style "object-fit" "contain"
+                ]
+    in
+    div containerStyles
+        [ img imageStyles []
         ]
 
 viewIntegrationOverview : Html msg
